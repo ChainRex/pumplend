@@ -1,0 +1,36 @@
+.container {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.text-field {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 16px;
+  background: var(--gray-a2);
+  border: 1px solid var(--gray-a4);
+  border-radius: 6px;
+  color: var(--gray-12);
+}
+
+.text-field:focus {
+  outline: none;
+  border-color: var(--blue-a8);
+}
+
+.mint-button {
+  width: 100%;
+  background: linear-gradient(90deg, #3898FF 0%, #7A70FF 100%);
+  border: none;
+  padding: 12px;
+  border-radius: 8px;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.mint-button:hover {
+  opacity: 0.9;
+} 

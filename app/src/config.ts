@@ -1,0 +1,1 @@
+export const PUMPSUI_CORE_PACKAGE_ID = "0xbbe046e21ecb019f7e761a0eeda1345915dfa24e7ef81426237f0caafb111f8e"; 
