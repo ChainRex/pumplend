@@ -1,0 +1,22 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+// 代币信息
+model Token {
+    id                  String   @id @default(uuid())
+    name                String
+    symbol              String
+    type                String   @unique // 包+模块+对象
+    icon                String
+    decimals            Int      @default(9)
+    treasuryCapHolderId String
+    poolId              String
+    createdAt           DateTime @default(now())
+    updatedAt           DateTime @updatedAt
+}

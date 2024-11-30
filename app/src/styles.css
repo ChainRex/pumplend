@@ -6,17 +6,17 @@
 
 .text-field {
   width: 100%;
-  padding: 8px 12px;
-  font-size: 16px;
-  background: var(--gray-a2);
-  border: 1px solid var(--gray-a4);
-  border-radius: 6px;
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  font-weight: 500;
   color: var(--gray-12);
+  padding: 8px;
+  padding-right: 0;
 }
 
 .text-field:focus {
   outline: none;
-  border-color: var(--blue-a8);
 }
 
 .mint-button {
@@ -33,4 +33,256 @@
 
 .mint-button:hover {
   opacity: 0.9;
-} 
+}
+
+/* 添加暗色主题支持 */
+:root {
+  color-scheme: dark;
+}
+
+.nav-button {
+  background: none;
+  border: none;
+  color: var(--gray-11);
+  font-size: 16px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.nav-button:hover {
+  color: var(--gray-12);
+}
+
+.nav-button.active {
+  color: white;
+}
+
+/* 钱包按钮样式 */
+:where(.wallet-button) {
+  min-height: 40px !important;
+  padding: 0 16px !important;
+  font-size: 15px !important;
+  cursor: pointer !important;
+}
+
+/* 确保连接前后按钮大小一致 */
+:where(.wallet-button-trigger) {
+  min-height: 40px !important;
+  padding: 0 16px !important;
+  font-size: 15px !important;
+  cursor: pointer !important;
+}
+
+.swap-box {
+  background: var(--gray-a2);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.tab-button {
+  flex: 1;
+  background: transparent;
+  color: var(--gray-11);
+  border: none;
+  padding: 12px;
+  border-radius: 12px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.tab-button.active {
+  background: var(--gray-a3);
+  color: white;
+}
+
+.amount-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+}
+
+.amount-input input {
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  font-weight: 500;
+  width: 100%;
+  padding: 8px;
+}
+
+.amount-input input:focus {
+  outline: none;
+}
+
+.token-select {
+  min-width: 120px;
+  background: var(--gray-a4);
+  border: none;
+  border-radius: 12px;
+  padding: 8px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--gray-12);
+  font-weight: 500;
+  margin-left: 4px;
+}
+
+.token-select:hover {
+  background: var(--gray-a5);
+}
+
+.token-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* 加粗选择框内的文字 */
+.token-select span {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+/* 加粗下拉菜单中的文字 */
+[data-radix-select-item] {
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+[data-radix-select-item]:hover {
+  background: var(--gray-a4);
+}
+
+[data-radix-select-item][data-highlighted] {
+  background: var(--gray-a4);
+  outline: none;
+}
+
+.arrow-button {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--gray-a4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border: 4px solid var(--gray-1);
+  padding: 0;
+  margin: -12px 0;
+  z-index: 1;
+}
+
+.arrow-button:hover {
+  background: var(--gray-a5);
+}
+
+.swap-button {
+  width: 100%;
+  background: linear-gradient(90deg, #3898FF 0%, #7A70FF 100%);
+  border: none;
+  padding: 12px;
+  border-radius: 12px;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  margin-top: 8px;
+}
+
+.swap-button:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.swap-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.max-button {
+  padding: 2px 6px !important;
+  font-size: 12px !important;
+  color: var(--gray-11) !important;
+  transition: all 0.2s !important;
+  height: auto !important;
+  min-width: auto !important;
+  margin-left: -4px !important;
+  cursor: pointer !important;
+}
+
+.max-button:hover {
+  color: var(--gray-12) !important;
+  background: var(--gray-a3) !important;
+  transform: scale(1.05);
+}
+
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  padding: 16px 24px;
+  border-radius: 16px;
+  animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 1000;
+  max-width: 400px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.toast.info {
+  background: rgba(56, 152, 255, 0.9);
+  color: white;
+  border-left: 4px solid #3898FF;
+}
+
+.toast.error {
+  background: rgba(255, 53, 53, 0.9);
+  color: white;
+  border-left: 4px solid rgb(255, 53, 53);
+}
+
+.toast.success {
+  background: rgba(37, 184, 100, 0.9);
+  color: white;
+  border-left: 4px solid rgb(37, 184, 100);
+}
+
+.toast-link {
+  color: rgba(255, 255, 255, 0.9) !important;
+  text-decoration: none !important;
+  font-size: 12px !important;
+  transition: opacity 0.2s !important;
+  cursor: pointer !important;
+}
+
+.toast-link:hover {
+  opacity: 0.8;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* 多个 Toast 的堆叠效果 */
+.toast + .toast {
+  margin-bottom: 16px;
+  transform: translateY(-8px) scale(0.95);
+}
+ 
