@@ -1,6 +1,6 @@
 import { Box, Button, Container, Flex, IconButton, Select, Text } from "@radix-ui/themes";
 import { ArrowDownIcon } from "@radix-ui/react-icons";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
 import { PUMPSUI_CORE_PACKAGE_ID, TESTSUI_ICON_URL, TESTSUI_PACKAGE_ID } from "./config";
@@ -10,6 +10,25 @@ import { useTokenBalance } from "./hooks/useTokenBalance";
 import { useQueryClient } from "@tanstack/react-query";
 import { Toast } from './components/Toast';
 import { useToast } from './hooks/useToast';
+
+// 添加错误码常量
+const ERROR_CODES = {
+  1001: "Insufficient SUI balance",
+  1002: "Insufficient token supply - Max supply reached",
+  1003: "Insufficient token balance",
+  1004: "Insufficient pool balance"
+} as const;
+
+// 解析 Move 错误的辅助函数
+const parseMoveError = (error: string) => {
+  // 匹配错误码
+  const match = error.match(/MoveAbort\(.*?, (\d+)\)/);
+  if (match) {
+    const errorCode = parseInt(match[1]);
+    return ERROR_CODES[errorCode as keyof typeof ERROR_CODES] || "Unknown error";
+  }
+  return null;
+};
 
 export function Trade() {
   const [fromAmount, setFromAmount] = useState("");
@@ -23,6 +42,8 @@ export function Trade() {
   const queryClient = useQueryClient();
   const { toasts, showToast, hideToast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // 获取 TESTSUI 余额
   const { data: testSuiBalance } = useTokenBalance(
@@ -50,9 +71,9 @@ export function Trade() {
 
   const handleSwap = () => {
     setIsTestSuiOnRight(!isTestSuiOnRight);
-    const tempAmount = fromAmount;
-    setFromAmount(toAmount);
-    setToAmount(tempAmount);
+    // 清空输入值
+    setFromAmount("");
+    setToAmount("");
   };
 
   // 处理代币支付的辅助函数
@@ -61,7 +82,9 @@ export function Trade() {
     amount: bigint,
     tx: Transaction
   ) => {
-    if (!currentAccount) throw new Error("Please connect your wallet");
+    if (!currentAccount) {
+      throw new Error("Please connect your wallet");
+    }
 
     // 1. 获取用户的所有代币
     const coins = await suiClient.getCoins({
@@ -118,8 +141,7 @@ export function Trade() {
 
   const handleTrade = async () => {
     if (!currentAccount || !selectedToken || !fromAmount) {
-      showToast('Please complete all trading information', 'error');
-      return;
+      throw new Error("Please complete all trading information");
     }
 
     try {
@@ -140,8 +162,7 @@ export function Trade() {
         const poolId = selectedToken.poolId;
         
         if (!treasuryCapHolderId || !poolId) {
-          showToast('Incomplete token information', 'error');
-          return;
+          throw new Error("Incomplete token information");
         }
 
         // 准备 TESTSUI 支付
@@ -167,8 +188,7 @@ export function Trade() {
         const poolId = selectedToken.poolId;
         
         if (!treasuryCapHolderId || !poolId) {
-          showToast('Incomplete token information', 'error');
-          return;
+          throw new Error("Incomplete token information");
         }
 
         // 准备代币支付
@@ -232,8 +252,12 @@ export function Trade() {
           },
         }
       );
-    } catch (error) {
-      if (error instanceof Error) {
+    } catch (error: any) {
+      // 检查是否是 Move 错误
+      const moveError = parseMoveError(error.message);
+      if (moveError) {
+        showToast(moveError, 'error');
+      } else if (error instanceof Error) {
         showToast(error.message, 'error');
       } else {
         showToast('Transaction failed', 'error');
@@ -242,7 +266,7 @@ export function Trade() {
     }
   };
 
-  // 处理 Max 按钮点击
+  // 修改 handleMaxClick 函数
   const handleMaxClick = () => {
     if (!currentAccount) return;
 
@@ -252,16 +276,21 @@ export function Trade() {
       const balanceStr = balance.toString();
       const length = balanceStr.length;
       
+      let newAmount: string;
       if (length <= 9) {
         // 如果长度小于9，需要在小数点后补零
         const decimals = '0'.repeat(9 - length);
-        setFromAmount(`0.${decimals}${balanceStr}`);
+        newAmount = `0.${decimals}${balanceStr}`;
       } else {
         // 如果长度大于9，在适当位置插入小数点
         const integerPart = balanceStr.slice(0, length - 9);
         const decimalPart = balanceStr.slice(length - 9);
-        setFromAmount(`${integerPart}.${decimalPart}`);
+        newAmount = `${integerPart}.${decimalPart}`;
       }
+      
+      setFromAmount(newAmount);
+      // 调用预览交易函数
+      previewTrade(newAmount);
     }
   };
 
@@ -324,6 +353,10 @@ export function Trade() {
     if (isLoading) {
       return <ClipLoader size={20} color="white" />;
     }
+
+    if (isPreviewLoading) {
+      return <ClipLoader size={20} color="white" />;
+    }
     
     return "Swap";
   };
@@ -334,7 +367,7 @@ export function Trade() {
       // 如果未连接钱包，只有在填写金额且选择代币时才可点击
       return !(fromAmount && selectedToken);
     }
-    return !selectedToken || !fromAmount || isLoading;
+    return !selectedToken || !fromAmount || isLoading || isPreviewLoading || !toAmount;
   };
 
   // 修改处理 Swap 按钮点击的逻辑
@@ -346,6 +379,170 @@ export function Trade() {
     }
     handleTrade();
   };
+
+  // 修改 previewTrade 函数
+  const previewTrade = async (amount: string) => {
+    if (!currentAccount || !selectedToken || !amount) {
+      setToAmount("");
+      return;
+    }
+
+    // 如果存在上一次的请求，取消它
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    // 创建新的 AbortController
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
+    // 开始预览计算时设置加载状态
+    setIsPreviewLoading(true);
+
+    try {
+      // 检查是否已被取消
+      if (abortController.signal.aborted) {
+        return;
+      }
+
+      const tx = new Transaction();
+      
+      // 计算输入金额
+      const [integerPart, decimalPart = ''] = amount.split('.');
+      const paddedDecimal = (decimalPart + '0'.repeat(9)).slice(0, 9);
+      const amountStr = integerPart + paddedDecimal;
+      const amountBigInt = BigInt(amountStr);
+
+      if (!isTestSuiOnRight) { // TESTSUI 在左边，买入其他代币
+        const treasuryCapHolderId = selectedToken.treasuryCapHolderId;
+        const poolId = selectedToken.poolId;
+        
+        if (!treasuryCapHolderId || !poolId) {
+          showToast('Incomplete token information', 'error');
+          setToAmount("");
+          return;
+        }
+
+        // 模拟 TESTSUI 支付
+        const paymentCoin = await preparePaymentCoin(
+          `${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`,
+          amountBigInt,
+          tx
+        );
+
+        // 执行购买
+        tx.moveCall({
+          target: `${PUMPSUI_CORE_PACKAGE_ID}::pumpsui_core::buy`,
+          typeArguments: [selectedToken.type],
+          arguments: [
+            tx.object(poolId),
+            tx.object(treasuryCapHolderId),
+            paymentCoin,
+          ],
+        });
+
+      } else { // TESTSUI 在右边，卖出其他代币
+        const treasuryCapHolderId = selectedToken.treasuryCapHolderId;
+        const poolId = selectedToken.poolId;
+        
+        if (!treasuryCapHolderId || !poolId) {
+          showToast('Incomplete token information', 'error');
+          setToAmount("");
+          return;
+        }
+
+        // 模拟代币支付
+        const paymentCoin = await preparePaymentCoin(
+          selectedToken.type,
+          amountBigInt,
+          tx
+        );
+        console.log('paymentCoin', paymentCoin);
+
+        // 执行卖出
+        tx.moveCall({
+          target: `${PUMPSUI_CORE_PACKAGE_ID}::pumpsui_core::sell`,
+          typeArguments: [selectedToken.type],
+          arguments: [
+            tx.object(poolId),
+            tx.object(treasuryCapHolderId),
+            paymentCoin,
+          ],
+        });
+      }
+      tx.setSender(currentAccount.address);
+      // 执行模拟交易
+      const dryRunResult = await suiClient.dryRunTransactionBlock({
+        transactionBlock: await tx.build({ client: suiClient }),
+      });
+
+      // 再次检查是否已被取消
+      if (abortController.signal.aborted) {
+        return;
+      }
+
+      // 分析余额变化
+      if (dryRunResult.balanceChanges) {
+        const relevantChange = dryRunResult.balanceChanges.find(change => 
+          isTestSuiOnRight 
+            ? change.coinType === `${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`
+            : change.coinType === selectedToken.type
+        );
+
+        if (relevantChange) {
+          // 转换余额变化为可读格式
+          const changeAmount = BigInt(relevantChange.amount);
+          const absChange = changeAmount < 0 ? -changeAmount : changeAmount;
+          
+          // 转换为带小数点的字符串
+          const changeStr = absChange.toString().padStart(10, '0');
+          const integerPart = changeStr.slice(0, -9) || '0';
+          const decimalPart = changeStr.slice(-9);
+          
+          setToAmount(`${integerPart}.${decimalPart}`);
+        } else {
+          setToAmount("");
+        }
+      }
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        return;
+      }
+
+      const moveError = parseMoveError(error.message);
+      if (moveError) {
+        setToAmount("");
+        showToast(moveError, 'error');
+      } else {
+        console.error('Preview error:', error);
+        setToAmount("");
+        showToast(error.message || 'Preview failed', 'error');
+      }
+    } finally {
+      // 只有当这个 controller 仍然是当前的 controller 时才清除加载状态
+      if (abortControllerRef.current === abortController) {
+        setIsPreviewLoading(false);
+        abortControllerRef.current = null;
+      }
+    }
+  };
+
+  // 修改 fromAmount 的 onChange 处理函数
+  const handleFromAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newAmount = e.target.value;
+    setFromAmount(newAmount);
+    // 当输入金额改变时预览交易结果
+    previewTrade(newAmount);
+  };
+
+  // 在组件卸载时清理
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   return (
     <Container size="1">
@@ -374,7 +571,7 @@ export function Trade() {
                   className="text-field"
                   placeholder="0"
                   value={fromAmount}
-                  onChange={(e) => setFromAmount(e.target.value)}
+                  onChange={handleFromAmountChange}
                 />
                 {currentAccount && (
                   <Button 
@@ -422,7 +619,8 @@ export function Trade() {
                 className="text-field"
                 placeholder="0"
                 value={toAmount}
-                onChange={(e) => setToAmount(e.target.value)}
+                readOnly
+                style={{ cursor: 'default' }}
               />
               {isTestSuiOnRight ? <TestSuiToken /> : <OtherTokenSelect />}
             </Flex>
