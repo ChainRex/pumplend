@@ -2,11 +2,20 @@
 
 [move]
 version = 3
-manifest_digest = "D14314C8E66931EE17876C14F994EA480B80534AD800FC5A46F264A0173E1A73"
-deps_digest = "3C4103934B1E040BB6B23F1D610B4EF9F2F1166A50A104EADCF77467C004C600"
+manifest_digest = "E6356165DAC9AF367DDA653B460C55504C3E1568D3E85C66F84EB9A0791C48A6"
+deps_digest = "060AD7E57DFB13104F21BE5F5C3759D03F0553FC3229247D9A7A6B45F50D03A3"
 dependencies = [
+  { id = "LegatoMath", name = "LegatoMath" },
   { id = "Sui", name = "Sui" },
   { id = "testsui", name = "testsui" },
+]
+
+[[move.package]]
+id = "LegatoMath"
+source = { local = "../legato_math" }
+
+dependencies = [
+  { id = "MoveStdlib", name = "MoveStdlib" },
 ]
 
 [[move.package]]
@@ -38,6 +47,6 @@ flavor = "sui"
 
 [env.testnet]
 chain-id = "4c78adac"
-original-published-id = "0xb161cad39deabd90d7d4618de71e40d4812d69fa169a241ced2782c6515c7ed1"
-latest-published-id = "0xb161cad39deabd90d7d4618de71e40d4812d69fa169a241ced2782c6515c7ed1"
+original-published-id = "0x471632d314393f32939fdd0a38b393b9dcc0e83d1ede8ca1b341f319b20c0354"
+latest-published-id = "0x471632d314393f32939fdd0a38b393b9dcc0e83d1ede8ca1b341f319b20c0354"
 published-version = "1"

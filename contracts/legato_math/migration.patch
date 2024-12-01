@@ -1,0 +1,62 @@
+--- ./sources/helpers/fixed_point64.move
++++ ./sources/helpers/fixed_point64.move
+@@ -17 +17 @@
+-    struct FixedPoint64 has copy, drop, store { value: u128 }
++    public struct FixedPoint64 has copy, drop, store { value: u128 }
+--- ./sources/helpers/math128.move
++++ ./sources/helpers/math128.move
+@@ -45 +45 @@
+-    public fun pow(n: u128, e: u128): u128 {
++    public fun pow(mut n: u128, mut e: u128): u128 {
+@@ -49 +49 @@
+-            let p = 1;
++            let mut p = 1;
+@@ -62,2 +62,2 @@
+-    public fun floor_log2(x: u128): u8 {
+-        let res = 0;
++    public fun floor_log2(mut x: u128): u8 {
++        let mut res = 0;
+@@ -66 +66 @@
+-        let n = 64;
++        let mut n = 64;
+@@ -79 +79 @@
+-    public fun log2_64(x: u128): FixedPoint64 {
++    public fun log2_64(mut x: u128): FixedPoint64 {
+@@ -87,2 +87,2 @@
+-        let frac = 0;
+-        let delta = 1 << 63;
++        let mut frac = 0;
++        let mut delta = 1 << 63;
+@@ -109 +109 @@
+-        let res = 1 << ((floor_log2(x) + 1) >> 1);
++        let mut res = 1 << ((floor_log2(x) + 1) >> 1);
+--- ./sources/helpers/math_fixed64.move
++++ ./sources/helpers/math_fixed64.move
+@@ -19 +19 @@
+-        let z = (math128::sqrt(y) << 32 as u256);
++        let mut z = (math128::sqrt(y) << 32 as u256);
+@@ -72 +72 @@
+-        let power = pow_raw(roottwo, (exponent as u128));
++        let mut power = pow_raw(roottwo, (exponent as u128));
+@@ -87,2 +87,2 @@
+-    fun pow_raw(x: u256, n: u128): u256 {
+-        let res: u256 = 1 << 64;
++    fun pow_raw(mut x: u256, mut n: u128): u256 {
++        let mut res: u256 = 1 << 64;
+--- ./sources/legato_math.move
++++ ./sources/legato_math.move
+@@ -66 +66 @@
+-            let guess = fixed_point64::create_from_rational(1, 2);
++            let mut guess = fixed_point64::create_from_rational(1, 2);
+@@ -71 +71 @@
+-            let delta = fixed_point64::create_from_rational( MAX_U64, 1 );
++            let mut delta = fixed_point64::create_from_rational( MAX_U64, 1 );
+@@ -94 +94 @@
+-    public fun pow_raw(x: FixedPoint64, n: u64): FixedPoint64 {
++    public fun pow_raw(x: FixedPoint64, mut n: u64): FixedPoint64 {
+@@ -96 +96 @@
+-        let raw_value = (fixed_point64::get_raw_value(x) as u256);
++        let mut raw_value = (fixed_point64::get_raw_value(x) as u256);
+@@ -98 +98 @@
+-        let res: u256 = 1 << 64;
++        let mut res: u256 = 1 << 64;

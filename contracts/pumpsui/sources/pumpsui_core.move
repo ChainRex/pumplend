@@ -6,10 +6,11 @@ module pumpsui::pumpsui_core {
     use sui::balance::{Self, Balance};
     use sui::math;
     use testsui::testsui::{ TESTSUI };
+    use pumpsui::bonding_curve;
 
     const DECIMALS: u64 = 1_000_000_000;
     const MAX_SUPPLY: u64 = 1_000_000_000 * DECIMALS;
-    const FUNDING_SUI: u64 = 23000 * DECIMALS;
+    const FUNDING_SUI: u64 = 20000 * DECIMALS;
     const FUNDING_TOKEN: u64 = (MAX_SUPPLY * 4) / 5;
 
     const EInsufficientSUI: u64 = 1001;
@@ -58,9 +59,9 @@ module pumpsui::pumpsui_core {
         let payment_value = coin::value(&payment);
         assert!(payment_value > 0, EInsufficientSUI);
 
-        let token_amount = calculate_buy_return(payment_value);
-
         let current_supply = coin::total_supply(&treasury_cap_holder.treasury_cap);
+
+        let token_amount = bonding_curve::calculate_buy_amount(payment_value, current_supply);
         assert!(
             current_supply + token_amount <= MAX_SUPPLY,
             EInsufficientTokenSupply
@@ -94,7 +95,8 @@ module pumpsui::pumpsui_core {
         let token_amount = coin::value(&token_coin);
         assert!(token_amount > 0, EInsufficientToken);
 
-        let sui_return = calculate_sell_return(token_amount);
+        let current_supply = coin::total_supply(&treasury_cap_holder.treasury_cap);
+        let sui_return = bonding_curve::calculate_sell_return(token_amount, current_supply);
 
         let pool_balance = balance::value(&pool.sui_balance);
         assert!(
@@ -112,16 +114,6 @@ module pumpsui::pumpsui_core {
             ctx
         );
         transfer::public_transfer(sui_coin, tx_context::sender(ctx));
-    }
-
-    /// 计算购买返回的代币数量
-    fun calculate_buy_return(sui_amount: u64): u64 {
-        ((sui_amount as u256) * (FUNDING_TOKEN as u256) / (FUNDING_SUI as u256)) as u64
-    }
-
-    /// 计算出售代币应该返还的 SUI 数量
-    fun calculate_sell_return(token_amount: u64): u64 {
-        ((token_amount as u256) * (FUNDING_SUI as u256) / (FUNDING_TOKEN as u256)) as u64
     }
 
 }

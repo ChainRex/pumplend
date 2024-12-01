@@ -1,0 +1,9 @@
+[package]
+name = "LegatoMath"
+edition = "2024.beta"
+
+[dependencies] 
+MoveStdlib = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/move-stdlib", rev = "framework/testnet" }
+
+[addresses]
+legato_math = "0x0"

@@ -125,7 +125,15 @@ export function Trade() {
     try {
       setIsLoading(true);
       const tx = new Transaction();
-      const amount = BigInt(Number(fromAmount) * 1e9);
+      
+      // 新的计算方式
+      const [integerPart, decimalPart = ''] = fromAmount.split('.');
+      const paddedDecimal = (decimalPart + '0'.repeat(9)).slice(0, 9);
+      const amountStr = integerPart + paddedDecimal;
+      const amount = BigInt(amountStr);
+      
+      console.log('fromAmount:', fromAmount);
+      console.log('Amount:', amount.toString());
       
       if (!isTestSuiOnRight) { // TESTSUI 在左边，买入其他代币
         const treasuryCapHolderId = selectedToken.treasuryCapHolderId;
@@ -240,8 +248,20 @@ export function Trade() {
 
     const balance = !isTestSuiOnRight ? testSuiBalance?.raw : selectedTokenBalance?.raw;
     if (balance) {
-      // 将原始余额转换为显示值，但不进行四舍五入
-      setFromAmount((Number(balance) / 1e9).toString());
+      // 使用字符串操作来保持精度
+      const balanceStr = balance.toString();
+      const length = balanceStr.length;
+      
+      if (length <= 9) {
+        // 如果长度小于9，需要在小数点后补零
+        const decimals = '0'.repeat(9 - length);
+        setFromAmount(`0.${decimals}${balanceStr}`);
+      } else {
+        // 如果长度大于9，在适当位置插入小数点
+        const integerPart = balanceStr.slice(0, length - 9);
+        const decimalPart = balanceStr.slice(length - 9);
+        setFromAmount(`${integerPart}.${decimalPart}`);
+      }
     }
   };
 
