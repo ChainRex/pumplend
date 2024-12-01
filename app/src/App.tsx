@@ -1,13 +1,59 @@
 import { Theme } from "@radix-ui/themes";
-import { WalletProvider, ConnectButton } from "@mysten/dapp-kit";
+import { WalletProvider, ConnectButton, useSignAndExecuteTransaction, useCurrentAccount } from "@mysten/dapp-kit";
 import { BrowserRouter, Routes, Route, useNavigate, Navigate, useLocation } from "react-router-dom";
 import { TokenMint } from "./TokenMint";
 import { Trade } from "./Trade";
 import { Box, Flex, Text } from "@radix-ui/themes";
+import { Transaction } from "@mysten/sui/transactions";
+import { PlusCircledIcon } from "@radix-ui/react-icons";
+import { TESTSUI_TREASURECAP_ID,TESTSUI_PACKAGE_ID } from "./config";
+import { useToast } from './hooks/useToast';
 
 function Navigation() {
+  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const currentAccount = useCurrentAccount();
+  const { toasts, showToast, hideToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
+
+  const handleMintTestSui = async () => {
+    if (!currentAccount) {
+      showToast('请先连接钱包', 'error');
+      return;
+    }
+
+    try {
+      const tx = new Transaction();
+      tx.moveCall({
+        target: `${TESTSUI_PACKAGE_ID}::testsui::mint`,
+        arguments: [
+          tx.object(TESTSUI_TREASURECAP_ID),
+          tx.pure.u64(100000000000000), // 100,000 TESTSUI
+          tx.pure.address(currentAccount.address)
+        ],
+      });
+
+      await signAndExecute(
+        {
+          transaction: tx,
+        },
+        {
+          onSuccess: (result) => {
+            showToast('成功铸造 100,000 TESTSUI', 'success', result.digest);
+          },
+          onError: (error) => {
+            showToast(error.message || '铸造失败', 'error');
+          },
+        }
+      );
+    } catch (error) {
+      if (error instanceof Error) {
+        showToast(error.message, 'error');
+      } else {
+        showToast('铸造失败', 'error');
+      }
+    }
+  };
 
   return (
     <Flex justify="between" align="center" mb="6">
@@ -29,7 +75,15 @@ function Navigation() {
         </Flex>
       </Flex>
       
-      <ConnectButton className="wallet-button" />
+      <Flex gap="3" align="center">
+        {currentAccount && (
+          <button className="mint-testsui-button" onClick={handleMintTestSui}>
+            <PlusCircledIcon />
+            <span>获取TESTSUI</span>
+          </button>
+        )}
+        <ConnectButton className="wallet-button" />
+      </Flex>
     </Flex>
   );
 }

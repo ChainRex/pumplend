@@ -311,6 +311,42 @@ export function Trade() {
     </Select.Root>
   );
 
+  // 在 Trade 组件内部添加一个新的辅助函数
+  const getSwapButtonText = () => {
+    if (!currentAccount) {
+      // 如果未连接钱包，但已填写金额且选择了代币，显示 Connect Wallet
+      if (fromAmount && selectedToken) {
+        return "Connect Wallet";
+      }
+      return "Connect Wallet";
+    }
+    
+    if (isLoading) {
+      return <ClipLoader size={20} color="white" />;
+    }
+    
+    return "Swap";
+  };
+
+  // 修改 Swap 按钮的 disabled 条件
+  const isSwapButtonDisabled = () => {
+    if (!currentAccount) {
+      // 如果未连接钱包，只有在填写金额且选择代币时才可点击
+      return !(fromAmount && selectedToken);
+    }
+    return !selectedToken || !fromAmount || isLoading;
+  };
+
+  // 修改处理 Swap 按钮点击的逻辑
+  const handleSwapButtonClick = () => {
+    if (!currentAccount) {
+      // 如果未连接钱包，触发钱包连接
+      document.querySelector<HTMLButtonElement>('.wallet-button')?.click();
+      return;
+    }
+    handleTrade();
+  };
+
   return (
     <Container size="1">
       <Flex direction="column" gap="4">
@@ -397,15 +433,10 @@ export function Trade() {
         <Button 
           size="3" 
           className="swap-button"
-          onClick={handleTrade}
-          disabled={!currentAccount || !selectedToken || !fromAmount || isLoading}
+          onClick={handleSwapButtonClick}
+          disabled={isSwapButtonDisabled()}
         >
-          {!currentAccount 
-            ? "Connect Wallet" 
-            : isLoading 
-              ? <ClipLoader size={20} color="white" /> 
-              : "Swap"
-          }
+          {getSwapButtonText()}
         </Button>
       </Flex>
       

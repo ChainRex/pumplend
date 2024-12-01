@@ -285,4 +285,33 @@
   margin-bottom: 16px;
   transform: translateY(-8px) scale(0.95);
 }
+
+.mint-testsui-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(90deg, #3898FF 0%, #7A70FF 100%);
+  border: none;
+  padding: 8px 16px;
+  border-radius: 12px;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  height: 40px;
+}
+
+.mint-testsui-button:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.mint-testsui-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.mint-testsui-button span {
+  font-size: 14px;
+}
  

@@ -232,6 +232,44 @@ export function TokenMint() {
     }
   };
 
+  // 添加新的辅助函数
+  const getButtonText = () => {
+    if (!currentAccount) {
+      return "Connect Wallet";
+    }
+    return isLoading ? <ClipLoader size={20} color="white" /> : "Create Token";
+  };
+
+  // 修改按钮禁用状态的判断函数
+  const isButtonDisabled = () => {
+    const trimmedName = tokenName.trim();
+    const trimmedSymbol = tokenSymbol.trim();
+    const trimmedLogo = tokenLogo.trim();
+    const trimmedDescription = description.trim();
+    
+    // 检查所有字段是否都已填写
+    const allFieldsFilled = trimmedName && 
+      trimmedSymbol && 
+      trimmedLogo && 
+      trimmedDescription;
+    
+    if (!currentAccount) {
+      // 如果未连接钱包，只有在所有字段都填写后才可点击
+      return !allFieldsFilled;
+    }
+    return isLoading || !allFieldsFilled;
+  };
+
+  // 添加按钮点击处理函数
+  const handleButtonClick = () => {
+    if (!currentAccount) {
+      // 如果未连接钱包，触发钱包连接
+      document.querySelector<HTMLButtonElement>('.wallet-button')?.click();
+      return;
+    }
+    handleMintToken();
+  };
+
   return (
     <Container size="1" mt="6">
       <Flex direction="column" gap="6">
@@ -243,7 +281,7 @@ export function TokenMint() {
 
         <Form.Root onSubmit={(e) => {
           e.preventDefault();
-          handleMintToken();
+          handleButtonClick();
         }}>
           <Flex direction="column" gap="4">
             <Form.Field name="tokenName">
@@ -298,9 +336,9 @@ export function TokenMint() {
               size="3" 
               className="swap-button"
               type="submit"
-              disabled={!currentAccount || isLoading}
+              disabled={isButtonDisabled()}
             >
-              {isLoading ? <ClipLoader size={20} color="white" /> : "Create Token"}
+              {getButtonText()}
             </Button>
           </Flex>
         </Form.Root>
