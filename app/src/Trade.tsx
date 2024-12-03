@@ -361,7 +361,7 @@ export function Trade() {
     return "Swap";
   };
 
-  // 修改 Swap 按钮的 disabled 条件
+  // 修改 Swap 钮的 disabled 条件
   const isSwapButtonDisabled = () => {
     if (!currentAccount) {
       // 如果未连接钱包，只有在填写金额且选择代币时才可点击
@@ -407,7 +407,7 @@ export function Trade() {
 
       const tx = new Transaction();
       
-      // 计算输入金额
+      // 计算输入额
       const [integerPart, decimalPart = ''] = amount.split('.');
       const paddedDecimal = (decimalPart + '0'.repeat(9)).slice(0, 9);
       const amountStr = integerPart + paddedDecimal;
@@ -527,10 +527,23 @@ export function Trade() {
     }
   };
 
-  // 修改 fromAmount 的 onChange 处理函数
+  // 修改 handleFromAmountChange 函数
   const handleFromAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newAmount = e.target.value;
     setFromAmount(newAmount);
+    
+    // 如果输入为空，立即清空 toAmount 并停止计算
+    if (!newAmount) {
+      setToAmount("");
+      // 取消正在进行的计算
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      setIsPreviewLoading(false);
+      return;
+    }
+    
     // 当输入金额改变时预览交易结果
     previewTrade(newAmount);
   };
@@ -543,6 +556,14 @@ export function Trade() {
       }
     };
   }, []);
+
+  // 添加对钱包连接状态的监听
+  useEffect(() => {
+    // 当钱包连接且有输入金额和选择的代币时，触发预览
+    if (currentAccount && fromAmount && selectedToken) {
+      previewTrade(fromAmount);
+    }
+  }, [currentAccount]); // 只监听 currentAccount 的变化
 
   return (
     <Container size="1">

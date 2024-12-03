@@ -59,15 +59,35 @@ module pumpsui::pumpsui_core {
         let payment_value = coin::value(&payment);
         assert!(payment_value > 0, EInsufficientSUI);
 
-        let current_supply = coin::total_supply(&treasury_cap_holder.treasury_cap);
+        let mut payment_balance = coin::into_balance(payment);
+        
+        let current_pool_balance = balance::value(&pool.sui_balance);
+        let actual_payment_value = if (current_pool_balance + payment_value > FUNDING_SUI) {
+            // 如果超过募资目标，计算实际需要的金额
+            let refund_amount = (current_pool_balance + payment_value) - FUNDING_SUI;
+            // 从支付金额中分离出需要退还的部分
+            let refund_balance = balance::split(&mut payment_balance, refund_amount);
+            // 创建退款代币并转账给用户
+            let refund_coin = coin::from_balance(refund_balance, ctx);
+            transfer::public_transfer(
+                refund_coin,
+                tx_context::sender(ctx)
+            );
+            payment_value - refund_amount
+        } else {
+            payment_value
+        };
 
-        let token_amount = bonding_curve::calculate_buy_amount(payment_value, current_supply);
+        // 使用实际支付金额计算可获得的代币数量
+        let current_supply = coin::total_supply(&treasury_cap_holder.treasury_cap);
+        let token_amount = bonding_curve::calculate_buy_amount(actual_payment_value, current_supply);
+        
         assert!(
             current_supply + token_amount <= MAX_SUPPLY,
             EInsufficientTokenSupply
         );
 
-        let payment_balance = coin::into_balance(payment);
+        // 将实际支付金额加入池中
         balance::join(
             &mut pool.sui_balance,
             payment_balance
@@ -82,7 +102,6 @@ module pumpsui::pumpsui_core {
 
         if (balance::value(&pool.sui_balance) >= FUNDING_SUI) {
             // TODO: 检查是否达到 FUNDING_SUI 阈值，如果达到则创建流动性池
-
         };
     }
 
