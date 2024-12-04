@@ -606,12 +606,13 @@ export function Trade() {
                       queryKey: ["poolAddress", selectedToken.type],
                     });
 
-                    // 在成功创建流动性池时触发礼花效果
-                    setShowConfetti(true);
-                    // 5秒后自隐藏礼花
-                    setTimeout(() => {
-                      setShowConfetti(false);
-                    }, 5000);
+                    // 只有在成功创建流动性池时才触发礼花效果
+                    if (newStatus === "LIQUIDITY_POOL_CREATED") {
+                      setShowConfetti(true);
+                      setTimeout(() => {
+                        setShowConfetti(false);
+                      }, 5000);
+                    }
                   }
 
                 } catch (error) {
