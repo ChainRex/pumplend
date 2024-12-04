@@ -220,7 +220,7 @@ export function Trade() {
   const [previewCollectedSui, setPreviewCollectedSui] = useState<string>();
   const { preswap, swap } = useCetusSwap();
   const [showConfetti, setShowConfetti] = useState(false);
-  const [activeInput, setActiveInput] = useState<'from' | 'to' | null>(null);
+  const [, setActiveInput] = useState<'from' | 'to' | null>(null);
 
   // 获取 TESTSUI 余额
   const { data: testSuiBalance } = useTokenBalance(
@@ -664,33 +664,6 @@ export function Trade() {
     }
   };
 
-  // 修改 handleMaxClick 函数
-  const handleMaxClick = () => {
-    if (!currentAccount) return;
-
-    const balance = !isTestSuiOnRight ? testSuiBalance?.raw : selectedTokenBalance?.raw;
-    if (balance) {
-      // 使用字符串操作来保持精度
-      const balanceStr = balance.toString();
-      const length = balanceStr.length;
-      
-      let newAmount: string;
-      if (length <= 9) {
-        // 如果长度小于9，需要在小数点后补零
-        const decimals = '0'.repeat(9 - length);
-        newAmount = `0.${decimals}${balanceStr}`;
-      } else {
-        // 如果长度大于9，在适当位置插入小数点
-        const integerPart = balanceStr.slice(0, length - 9);
-        const decimalPart = balanceStr.slice(length - 9);
-        newAmount = `${integerPart}.${decimalPart}`;
-      }
-      
-      setFromAmount(newAmount);
-      // 调用预览交易函数
-      previewTrade(newAmount);
-    }
-  };
 
   // 固定的 TESTSUI 代币显示组件
   const TestSuiToken = () => (

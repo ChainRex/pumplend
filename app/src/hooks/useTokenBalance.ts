@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { useSuiClient } from "@mysten/dapp-kit";
-import { TESTSUI_PACKAGE_ID } from "../config";
 
 export interface TokenBalance {
   formatted: string;  // 用于显示的格式化字符串

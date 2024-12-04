@@ -12,7 +12,7 @@ import { useToast } from './hooks/useToast';
 function Navigation() {
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const currentAccount = useCurrentAccount();
-  const { toasts, showToast, hideToast } = useToast();
+  const { showToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
 
