@@ -28,7 +28,7 @@ function Navigation() {
         target: `${TESTSUI_PACKAGE_ID}::testsui::mint`,
         arguments: [
           tx.object(TESTSUI_TREASURECAP_ID),
-          tx.pure.u64(100000000000000), // 100,000 TESTSUI
+          tx.pure.u64(100000000000000), 
           tx.pure.address(currentAccount.address)
         ],
       });

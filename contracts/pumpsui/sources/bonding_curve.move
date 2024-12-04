@@ -115,76 +115,76 @@ module pumpsui::bonding_curve {
         std::debug::print(&result);
     }
 
-    // #[test]
-    // fun test_find_a_b() {
-    //     // 基础参数
-    //     let total_supply: u128 = 1_000_000_000 * DECIMALS;  // 10亿代币
-    //     let funding_token: u128 = total_supply * 4 / 5;  // 8亿代币用于募资
-    //     let funding_sui: u128 = 20_000 * DECIMALS;  // 目标募资额
-    //     let amm_token: u128 = total_supply - funding_token;  // 2亿代币
+    #[test]
+    fun test_find_a_b() {
+        // 基础参数
+        let total_supply: u128 = 1_000_000_000 * DECIMALS;  // 10亿代币
+        let funding_token: u128 = total_supply * 4 / 5;  // 8亿代币用于募资
+        let funding_sui: u128 = 20_000 * DECIMALS;  // 目标募资额
+        let amm_token: u128 = total_supply - funding_token;  // 2亿代币
         
-    //     // 计算目标AMM价格 C = funding_sui / amm_token
-    //     let target_price = fixed_point64::create_from_rational(funding_sui, amm_token);
+        // 计算目标AMM价格 C = funding_sui / amm_token
+        let target_price = fixed_point64::create_from_rational(funding_sui, amm_token);
         
-    //     let mut best_b: u128 = 0;
-    //     let mut best_a: u128 = 0;
-    //     let mut min_diff = fixed_point64::create_from_u128(100000); // 设置一个较大的初始差值
+        let mut best_b: u128 = 0;
+        let mut best_a: u128 = 0;
+        let mut min_diff = fixed_point64::create_from_u128(100000); // 设置一个较大的初始差值
         
-    //     let mut b = 1u128;
-    //     while (b <= 100) {
-    //         let mut a = 1u128;
-    //         while (a <= 2000) {
-    //             // 计算bonding curve在funding_token处的价格
-    //             let b_fixed = fixed_point64::create_from_rational(b, DECIMALS);
-    //             let a_fixed = fixed_point64::create_from_rational(a, DECIMALS);
+        let mut b = 1u128;
+        while (b <= 100) {
+            let mut a = 1u128;
+            while (a <= 2000) {
+                // 计算bonding curve在funding_token处的价格
+                let b_fixed = fixed_point64::create_from_rational(b, DECIMALS);
+                let a_fixed = fixed_point64::create_from_rational(a, DECIMALS);
                 
-    //             // 计算 b * funding_token
-    //             let b_x = math_fixed64::mul_div(
-    //                 b_fixed,
-    //                 fixed_point64::create_from_rational(funding_token, DECIMALS),
-    //                 fixed_point64::create_from_u128(1)
-    //             );
+                // 计算 b * funding_token
+                let b_x = math_fixed64::mul_div(
+                    b_fixed,
+                    fixed_point64::create_from_rational(funding_token, DECIMALS),
+                    fixed_point64::create_from_u128(1)
+                );
                 
-    //             // 计算 exp(b * funding_token)
-    //             let exp_b_x = math_fixed64::exp(b_x);
+                // 计算 exp(b * funding_token)
+                let exp_b_x = math_fixed64::exp(b_x);
                 
-    //             // 计算 a * exp(b * funding_token)，即bonding curve价格
-    //             let bc_price = math_fixed64::mul_div(a_fixed, exp_b_x, fixed_point64::create_from_u128(1));
+                // 计算 a * exp(b * funding_token)，即bonding curve价格
+                let bc_price = math_fixed64::mul_div(a_fixed, exp_b_x, fixed_point64::create_from_u128(1));
                 
-    //             // 计算价格差
-    //             let price_diff = if (fixed_point64::greater_or_equal(bc_price, target_price)) {
-    //                 fixed_point64::sub(bc_price, target_price)
-    //             } else {
-    //                 fixed_point64::sub(target_price, bc_price)
-    //             };
+                // 计算价格差
+                let price_diff = if (fixed_point64::greater_or_equal(bc_price, target_price)) {
+                    fixed_point64::sub(bc_price, target_price)
+                } else {
+                    fixed_point64::sub(target_price, bc_price)
+                };
                 
-    //             // 如果找到更小的差值，更新最佳结果
-    //             if (fixed_point64::less(price_diff, min_diff)) {
-    //                 min_diff = price_diff;
-    //                 best_a = a;
-    //                 best_b = b;
+                // 如果找到更小的差值，更新最佳结果
+                if (fixed_point64::less(price_diff, min_diff)) {
+                    min_diff = price_diff;
+                    best_a = a;
+                    best_b = b;
                     
-    //                 // 输出当前最佳结果
-    //                 std::debug::print(&b);
-    //                 std::debug::print(&a);
-    //                 std::debug::print(&get_value_with_precision(bc_price, 9));
-    //                 std::debug::print(&get_value_with_precision(target_price, 9));
-    //                 std::debug::print(&get_value_with_precision(min_diff, 9));
+                    // 输出当前最佳结果
+                    std::debug::print(&b);
+                    std::debug::print(&a);
+                    std::debug::print(&get_value_with_precision(bc_price, 9));
+                    std::debug::print(&get_value_with_precision(target_price, 9));
+                    std::debug::print(&get_value_with_precision(min_diff, 9));
 
-    //                 if (get_value_with_precision(min_diff, 9) == 0) {
-    //                     b = 110;
-    //                     break  
-    //                 };
-    //             };
+                    if (get_value_with_precision(min_diff, 9) == 0) {
+                        b = 110;
+                        break  
+                    };
+                };
                 
-    //             a = a + 1;
-    //         };
-    //         b = b + 1;
-    //     };
+                a = a + 1;
+            };
+            b = b + 1;
+        };
         
-    //     // 验证找到的结果
-    //     assert!(best_a > 0 && best_b > 0, 0);
-    // }
+        // 验证找到的结果
+        assert!(best_a > 0 && best_b > 0, 0);
+    }
 
     // #[test]
     // fun test_buy_process() {

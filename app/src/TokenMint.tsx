@@ -111,13 +111,22 @@ export function TokenMint() {
               (change) => change.type === "published"
             );
 
-            if (publishedModule && treasuryCapObject) {
+            // 查找 Metadata 对象
+            const metadataObject = createdObjects?.find(
+              (obj) => obj.objectType.includes("::CoinMetadata<")
+            );
+
+            if (publishedModule && treasuryCapObject && metadataObject) {
               const moduleId = publishedModule.packageId;
               const tokenType = `${moduleId}::${tokenSymbol.toLowerCase()}::${tokenSymbol.toUpperCase()}`;
               
               showToast("Creating pool...", "info");
               // 使用 TreasuryCap 创建交易池
-              await createPool(tokenType, treasuryCapObject.objectId);
+              await createPool(
+                tokenType, 
+                treasuryCapObject.objectId,
+                metadataObject.objectId
+              );
             } else {
               throw new Error("Failed to get token information");
             }
@@ -139,14 +148,18 @@ export function TokenMint() {
     }
   };
 
-  const createPool = async (coinType: string, treasuryCapId: string) => {
+  const createPool = async (
+    coinType: string, 
+    treasuryCapId: string,
+    metadataId: string
+  ) => {
     try {
       if (!currentAccount) return;
 
       const tx = new Transaction();
       
       tx.moveCall({
-        target: `${PUMPSUI_CORE_PACKAGE_ID}::pumpsui_core::create_pool`,
+        target: `${PUMPSUI_CORE_PACKAGE_ID}::pumpsui_core::create_collateral`,
         typeArguments: [coinType],
         arguments: [tx.object(treasuryCapId)],
       });
@@ -172,20 +185,20 @@ export function TokenMint() {
               },
             });
 
-            // 查找 Pool 和 TreasuryCapHolder 对象
+            // 查找 Collateral 和 TreasuryCapHolder 对象
             const createdObjects = txDetails.objectChanges?.filter(
               (change) => change.type === "created"
             );
 
-            const poolObject = createdObjects?.find(
-              (obj) => obj.objectType.includes("::Pool<")
+            const collateralObject = createdObjects?.find(
+              (obj) => obj.objectType.includes("::Collateral<")
             );
 
             const treasuryCapHolderObject = createdObjects?.find(
               (obj) => obj.objectType.includes("::TreasuryCapHolder<")
             );
 
-            if (poolObject && treasuryCapHolderObject) {
+            if (collateralObject && treasuryCapHolderObject) {
               // 更新代币信息
               await fetch('http://localhost:3000/api/tokens', {
                 method: 'POST',
@@ -198,7 +211,11 @@ export function TokenMint() {
                   type: coinType,
                   icon: tokenLogo,
                   treasuryCapHolderId: treasuryCapHolderObject.objectId,
-                  poolId: poolObject.objectId
+                  collateralId: collateralObject.objectId,
+                  metadataId: metadataId,
+                  totalSupply: "0",
+                  collectedSui: "0",
+                  status: "FUNDING"
                 })
               });
 

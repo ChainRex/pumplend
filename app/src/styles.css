@@ -314,4 +314,100 @@
 .mint-testsui-button span {
   font-size: 14px;
 }
+
+/* 如果需要自定义进度条样式 */
+.radix-themes {
+  --progress-radius: 9999px;
+}
+
+/* 进度条容器样式 */
+.funding-progress {
+  margin: 8px 0;
+}
+
+/* 自定义进度条样式 */
+.animated-progress {
+  height: 8px !important;
+  overflow: hidden;
+  background: var(--gray-a3) !important;
+}
+
+/* 进度条填充部分 */
+.animated-progress[data-state="loading"] > div {
+  background: linear-gradient(
+    90deg,
+    #3898FF 0%,
+    #7A70FF 50%,
+    #3898FF 100%
+  ) !important;
+  background-size: 200% 100% !important;
+  animation: shimmer 2s infinite linear !important;
+  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* 进度条数值文本过渡 */
+.funding-progress .rt-Text {
+  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 进度条动画 */
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* 进度条悬停效果 */
+.animated-progress:hover > div {
+  filter: brightness(1.1);
+  transition: filter 0.3s ease;
+}
+
+/* 确保进度条圆角一致 */
+.animated-progress,
+.animated-progress > div {
+  border-radius: 6px !important;
+  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* 流动性池提示样式 */
+.liquidity-pool-notice {
+  background: var(--gray-a3);
+  border-radius: 8px;
+  padding: 12px;
+  text-align: center;
+}
+
+.liquidity-pool-notice .rt-Text:first-child {
+  color: var(--accent-9);
+  margin-bottom: 4px;
+}
+
+/* 完成提示的样式 */
+.completion-notice {
+  background: var(--accent-a3);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 8px;
+  text-align: center;
+  animation: fadeIn 0.3s ease;
+}
+
+.completion-notice .rt-Text:first-child {
+  color: var(--accent-9);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
  

@@ -2,12 +2,31 @@
 
 [move]
 version = 3
-manifest_digest = "E6356165DAC9AF367DDA653B460C55504C3E1568D3E85C66F84EB9A0791C48A6"
-deps_digest = "060AD7E57DFB13104F21BE5F5C3759D03F0553FC3229247D9A7A6B45F50D03A3"
+manifest_digest = "BAB7FEDCC3992122685EEBD71917823A0765625709A341F66D7ABDE359C6FEE0"
+deps_digest = "F9B494B64F0615AED0E98FC12A85B85ECD2BC5185C22D30E7F67786BB52E507C"
 dependencies = [
+  { id = "CetusClmm", name = "CetusClmm" },
   { id = "LegatoMath", name = "LegatoMath" },
   { id = "Sui", name = "Sui" },
   { id = "testsui", name = "testsui" },
+]
+
+[[move.package]]
+id = "CetusClmm"
+source = { git = "https://github.com/CetusProtocol/cetus-clmm-interface.git", rev = "testnet-v1.25.0", subdir = "sui/cetus_clmm" }
+
+dependencies = [
+  { id = "IntegerMate", name = "IntegerMate" },
+  { id = "MoveSTL", name = "MoveSTL" },
+  { id = "Sui", name = "Sui" },
+]
+
+[[move.package]]
+id = "IntegerMate"
+source = { git = "https://github.com/CetusProtocol/integer-mate.git", rev = "testnet-v1.23.1", subdir = "sui" }
+
+dependencies = [
+  { id = "Sui", name = "Sui" },
 ]
 
 [[move.package]]
@@ -15,16 +34,24 @@ id = "LegatoMath"
 source = { local = "../legato_math" }
 
 dependencies = [
-  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+]
+
+[[move.package]]
+id = "MoveSTL"
+source = { git = "https://github.com/CetusProtocol/move-stl.git", rev = "testnet-v1.23.1", subdir = "sui" }
+
+dependencies = [
+  { id = "Sui", name = "Sui" },
 ]
 
 [[move.package]]
 id = "MoveStdlib"
-source = { git = "https://github.com/MystenLabs/sui.git", rev = "framework/testnet", subdir = "crates/sui-framework/packages/move-stdlib" }
+source = { git = "https://github.com/MystenLabs/sui.git", rev = "mainnet-v1.35.1", subdir = "crates/sui-framework/packages/move-stdlib" }
 
 [[move.package]]
 id = "Sui"
-source = { git = "https://github.com/MystenLabs/sui.git", rev = "framework/testnet", subdir = "crates/sui-framework/packages/sui-framework" }
+source = { git = "https://github.com/MystenLabs/sui.git", rev = "mainnet-v1.35.1", subdir = "crates/sui-framework/packages/sui-framework" }
 
 dependencies = [
   { id = "MoveStdlib", name = "MoveStdlib" },
@@ -45,8 +72,8 @@ flavor = "sui"
 
 [env]
 
-[env.testnet]
+[env.suiscan-testnet]
 chain-id = "4c78adac"
-original-published-id = "0x471632d314393f32939fdd0a38b393b9dcc0e83d1ede8ca1b341f319b20c0354"
-latest-published-id = "0x471632d314393f32939fdd0a38b393b9dcc0e83d1ede8ca1b341f319b20c0354"
+original-published-id = "0x61849330a6292f53650070183aa5e1599137e4b7f379a919bdf6773f15a3dd36"
+latest-published-id = "0x61849330a6292f53650070183aa5e1599137e4b7f379a919bdf6773f15a3dd36"
 published-version = "1"

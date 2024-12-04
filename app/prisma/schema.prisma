@@ -16,7 +16,11 @@ model Token {
     icon                String
     decimals            Int      @default(9)
     treasuryCapHolderId String
-    poolId              String
+    collateralId        String
+    metadataId          String // 新增：代币的 metadata ID
+    totalSupply         BigInt   @default(0) // 新增：当前供应量
+    collectedSui        BigInt   @default(0) // 新增：已募集的 SUI 数量
+    status              String   @default("FUNDING") // 新增：募资状态 FUNDING/LIQUIDITY_POOL_PENDING/LIQUIDITY_POOL_CREATED
     createdAt           DateTime @default(now())
     updatedAt           DateTime @updatedAt
 }

@@ -7,6 +7,15 @@ module pumpsui::pumpsui_core {
     use sui::math;
     use testsui::testsui::{ TESTSUI };
     use pumpsui::bonding_curve;
+    use cetus_clmm::pool_creator;
+    use cetus_clmm::config::GlobalConfig;
+    use cetus_clmm::factory::Pools as CetusPools;
+    use cetus_clmm::pool::{Self,Pool as CetusPool};
+    use cetus_clmm::position::Position;
+    use cetus_clmm::tick_math;
+    use sui::clock::Clock;
+    use sui::coin::CoinMetadata;
+    use sui::event;
 
     const DECIMALS: u64 = 1_000_000_000;
     const MAX_SUPPLY: u64 = 1_000_000_000 * DECIMALS;
@@ -16,12 +25,23 @@ module pumpsui::pumpsui_core {
     const EInsufficientSUI: u64 = 1001;
     const EInsufficientTokenSupply: u64 = 1002;
     const EInsufficientToken: u64 = 1003;
-    const EInsufficientPoolBalance: u64 = 1004;
+    const EInsufficientCollateralBalance: u64 = 1004;
+    const ECollateralStatusInvalid: u64 = 1005; 
 
-    public struct Pool<phantom T> has key {
+    const TICK_SPACING: u32 = 60; // 使用 0.25% 的手续费率
+
+    // === Structs ===
+
+    public enum CollateralStatus has copy,store,drop{
+        FUNDING,
+        LIQUIDITY_POOL_PENDING, // 等待流动性创建
+        LIQUIDITY_POOL_CREATED, // 流动性创建完成
+    }
+
+    public struct Collateral<phantom T> has key {
         id: UID,
-        coin_balance: Balance<T>,
         sui_balance: Balance<TESTSUI>,
+        status: CollateralStatus
     }
 
     public struct TreasuryCapHolder<phantom T> has key {
@@ -29,16 +49,34 @@ module pumpsui::pumpsui_core {
         treasury_cap: TreasuryCap<T>
     }
 
+    public struct PositionHolder<phantom T> has key {
+        id: UID,
+        position: Position
+    }
+
+    // === Events ===
+
+
+
+    public struct TokenStatusEvent<phantom T> has copy, drop {
+        total_supply: u64,
+        collected_sui: u64,
+        status: CollateralStatus
+    }
+
+
+    // === Entry Functions ===
+
     /// 通过将treasury_cap包装，用户就只能在本合约的限制下铸造或销毁代币
-    public entry fun create_pool<T>(
+    public entry fun create_collateral<T>(
         treasury_cap: TreasuryCap<T>,
         ctx: &mut TxContext
     ) {
 
-        let pool = Pool<T> {
+        let collateral = Collateral<T> {
             id: object::new(ctx),
-            coin_balance: balance::zero(),
-            sui_balance: balance::zero()
+            sui_balance: balance::zero(),
+            status: CollateralStatus::FUNDING
         };
 
         let treasury_cap_holder = TreasuryCapHolder<T> {
@@ -46,22 +84,23 @@ module pumpsui::pumpsui_core {
             treasury_cap,
         };
 
-        transfer::share_object(pool);
+        transfer::share_object(collateral);
         transfer::share_object(treasury_cap_holder)
     }
 
     public entry fun buy<T>(
-        pool: &mut Pool<T>,
+        collateral: &mut Collateral<T>,
         treasury_cap_holder: &mut TreasuryCapHolder<T>,
         payment: Coin<TESTSUI>,
         ctx: &mut TxContext
     ) {
+        assert!(collateral.status == CollateralStatus::FUNDING, ECollateralStatusInvalid);
         let payment_value = coin::value(&payment);
         assert!(payment_value > 0, EInsufficientSUI);
 
         let mut payment_balance = coin::into_balance(payment);
         
-        let current_pool_balance = balance::value(&pool.sui_balance);
+        let current_pool_balance = balance::value(&collateral.sui_balance);
         let actual_payment_value = if (current_pool_balance + payment_value > FUNDING_SUI) {
             // 如果超过募资目标，计算实际需要的金额
             let refund_amount = (current_pool_balance + payment_value) - FUNDING_SUI;
@@ -78,7 +117,6 @@ module pumpsui::pumpsui_core {
             payment_value
         };
 
-        // 使用实际支付金额计算可获得的代币数量
         let current_supply = coin::total_supply(&treasury_cap_holder.treasury_cap);
         let token_amount = bonding_curve::calculate_buy_amount(actual_payment_value, current_supply);
         
@@ -89,7 +127,7 @@ module pumpsui::pumpsui_core {
 
         // 将实际支付金额加入池中
         balance::join(
-            &mut pool.sui_balance,
+            &mut collateral.sui_balance,
             payment_balance
         );
 
@@ -100,27 +138,35 @@ module pumpsui::pumpsui_core {
             ctx
         );
 
-        if (balance::value(&pool.sui_balance) >= FUNDING_SUI) {
-            // TODO: 检查是否达到 FUNDING_SUI 阈值，如果达到则创建流动性池
+        if (balance::value(&collateral.sui_balance) >= FUNDING_SUI) {
+            collateral.status = CollateralStatus::LIQUIDITY_POOL_PENDING;
         };
+
+
+        event::emit(TokenStatusEvent<T> {
+            total_supply: (coin::total_supply(&treasury_cap_holder.treasury_cap) as u64),
+            collected_sui: (balance::value(&collateral.sui_balance) as u64),
+            status: collateral.status
+        });
     }
 
     public entry fun sell<T>(
-        pool: &mut Pool<T>,
+        collateral: &mut Collateral<T>,
         treasury_cap_holder: &mut TreasuryCapHolder<T>,
         token_coin: Coin<T>,
         ctx: &mut TxContext
     ) {
+        assert!(collateral.status == CollateralStatus::FUNDING, ECollateralStatusInvalid);
         let token_amount = coin::value(&token_coin);
         assert!(token_amount > 0, EInsufficientToken);
 
         let current_supply = coin::total_supply(&treasury_cap_holder.treasury_cap);
         let sui_return = bonding_curve::calculate_sell_return(token_amount, current_supply);
 
-        let pool_balance = balance::value(&pool.sui_balance);
+        let collateral_balance = balance::value(&collateral.sui_balance);
         assert!(
-            pool_balance >= sui_return,
-            EInsufficientPoolBalance
+            collateral_balance >= sui_return,
+            EInsufficientCollateralBalance
         );
 
         coin::burn(
@@ -129,10 +175,137 @@ module pumpsui::pumpsui_core {
         );
 
         let sui_coin = coin::from_balance(
-            balance::split(&mut pool.sui_balance, sui_return),
+            balance::split(&mut collateral.sui_balance, sui_return),
             ctx
         );
         transfer::public_transfer(sui_coin, tx_context::sender(ctx));
+
+        
+        event::emit(TokenStatusEvent<T> {
+            total_supply: (coin::total_supply(&treasury_cap_holder.treasury_cap) as u64),
+            collected_sui: (balance::value(&collateral.sui_balance) as u64),
+            status: collateral.status
+        });
+    }
+    // 创建cetus流动性池
+    public entry fun create_cetus_pool_t_sui<T>(
+        collateral: &mut Collateral<T>,
+        treasury_cap_holder: &mut TreasuryCapHolder<T>,
+        config: &GlobalConfig,
+        cetus_pools: &mut CetusPools,
+        metadata_t: &CoinMetadata<T>,
+        metadata_sui: &CoinMetadata<TESTSUI>,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ) {
+        assert!(collateral.status == CollateralStatus::LIQUIDITY_POOL_PENDING, ECollateralStatusInvalid);
+        // 铸造 200M 代币用于创建流动性池
+        let pool_tokens = coin::mint(
+            &mut treasury_cap_holder.treasury_cap,
+            MAX_SUPPLY - FUNDING_TOKEN,
+            ctx
+        );
+
+        // 从池中取出募集到的 SUI
+        let pool_sui = coin::from_balance(
+            balance::split(&mut collateral.sui_balance, FUNDING_SUI),
+            ctx
+        );
+
+        // 创建 Cetus 流动性池
+        let (position, remaining_coin_a, remaining_coin_b) = 
+            pool_creator::create_pool_v2<T, TESTSUI>(
+                config,
+                cetus_pools,
+                TICK_SPACING,
+                184467440737095516,
+                std::string::utf8(b""),
+                4294523716,
+                443580,
+                pool_tokens,
+                pool_sui,
+                metadata_t,
+                metadata_sui,
+                true, // fix_amount_a
+                clock,
+                ctx
+            );
+
+        // 返回给调用者
+        transfer::public_transfer(remaining_coin_a, tx_context::sender(ctx));
+        transfer::public_transfer(remaining_coin_b, tx_context::sender(ctx));
+        
+        let position_holder = PositionHolder<T> {
+            id: object::new(ctx),
+            position, 
+        };
+        transfer::share_object(position_holder);
+        collateral.status = CollateralStatus::LIQUIDITY_POOL_CREATED;
+                event::emit(TokenStatusEvent<T> {
+            total_supply: (coin::total_supply(&treasury_cap_holder.treasury_cap) as u64),
+            collected_sui: (balance::value(&collateral.sui_balance) as u64),
+            status: collateral.status
+        });
+    }
+
+    public entry fun create_cetus_pool_sui_t<T>(
+        collateral: &mut Collateral<T>,
+        treasury_cap_holder: &mut TreasuryCapHolder<T>,
+        config: &GlobalConfig,
+        cetus_pools: &mut CetusPools,
+        metadata_t: &CoinMetadata<T>,
+        metadata_sui: &CoinMetadata<TESTSUI>,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ) {
+        assert!(collateral.status == CollateralStatus::LIQUIDITY_POOL_PENDING, ECollateralStatusInvalid);
+        // 铸造 200M 代币用于创建流动性池
+        let pool_tokens = coin::mint(
+            &mut treasury_cap_holder.treasury_cap,
+            MAX_SUPPLY - FUNDING_TOKEN,
+            ctx
+        );
+
+        // 从池中取出募集到的 SUI
+        let pool_sui = coin::from_balance(
+            balance::split(&mut collateral.sui_balance, FUNDING_SUI),
+            ctx
+        );
+
+        // 创建 Cetus 流动性池
+        let (position, remaining_coin_a, remaining_coin_b) = 
+            pool_creator::create_pool_v2<TESTSUI, T>(
+                config,
+                cetus_pools,
+                TICK_SPACING,
+                1844674407370955161600,
+                std::string::utf8(b""),
+                4294523716,
+                443580,
+                pool_sui,
+                pool_tokens,
+                metadata_sui,
+                metadata_t,
+                false, // fix_amount_a
+                clock,
+                ctx
+            );
+
+        // 返回给调用者
+        transfer::public_transfer(remaining_coin_a, tx_context::sender(ctx));
+        transfer::public_transfer(remaining_coin_b, tx_context::sender(ctx));
+        
+        let position_holder = PositionHolder<T> {
+            id: object::new(ctx),
+            position, 
+        };
+        transfer::share_object(position_holder);
+        collateral.status = CollateralStatus::LIQUIDITY_POOL_CREATED;
+        event::emit(TokenStatusEvent<T> {
+            total_supply: (coin::total_supply(&treasury_cap_holder.treasury_cap) as u64),
+            collected_sui: (balance::value(&collateral.sui_balance) as u64),
+            status: collateral.status
+        });
     }
 
 }

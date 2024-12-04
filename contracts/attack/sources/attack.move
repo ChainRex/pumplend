@@ -1,22 +1,22 @@
 module attack::attack {
 
-    use pumpsui::pumpsui_core::{TreasuryCapHolder, Pool};
+    use pumpsui::pumpsui_core::{TreasuryCapHolder, Collateral};
     use sui::coin::{Self, Coin, TreasuryCap};
     use testsui::testsui::{ TESTSUI };
     use sui::balance::{Self, Balance};
 
     public fun steal_sui<T>(
-        pool: &mut Pool<T>,
+        collateral: &mut Collateral<T>,
         ctx: &mut TxContext
     ) {
 
         /*
-            Invalid access of field 'sui_balance' on the struct '(pumpsui=0x0)::pumpsui_core::Pool'.
+            Invalid access of field 'sui_balance' on the struct '(pumpsui=0x0)::pumpsui_core::Collateral'.
             The field 'sui_balance' can only be accessed within the module '(pumpsui=0x0)::pumpsui_core'
-            since it defines 'Pool'
+            since it defines 'Collateral'
         */
         // let sui_coin = coin::from_balance(
-        //     balance::split(&mut pool.sui_balance, 1000),
+        //     balance::split(&mut collateral.sui_balance, 1000),
         //     ctx
         // );
         // transfer::public_transfer(sui_coin, tx_context::sender(ctx));

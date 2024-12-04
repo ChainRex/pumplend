@@ -8,7 +8,7 @@ const { networkConfig, useNetworkVariable, useNetworkVariables } =
 
     },
     testnet: {
-      url: getFullnodeUrl("testnet"),
+      url: "https://rpc-testnet.suiscan.xyz:443",
 
     },
     mainnet: {
