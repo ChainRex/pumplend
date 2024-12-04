@@ -56,4 +56,45 @@ export class DatabaseService {
   static async getTokenStatus(type: string) {
     return prisma.token.findUnique({ where: { type } });
   }
+
+  static async updateTokenPool(
+    type: string,
+    {
+      poolId,
+      positionId,
+      tickLower,
+      tickUpper,
+      liquidity
+    }: {
+      poolId: string;
+      positionId: string;
+      tickLower: number;
+      tickUpper: number;
+      liquidity: string;
+    }
+  ) {
+    return prisma.token.update({
+      where: { type },
+      data: {
+        poolId,
+        positionId,
+        tickLower,
+        tickUpper,
+        liquidity
+      }
+    });
+  }
+
+  static async getTokenPool(type: string) {
+    return prisma.token.findUnique({
+      where: { type },
+      select: {
+        poolId: true,
+        positionId: true,
+        tickLower: true,
+        tickUpper: true,
+        liquidity: true
+      }
+    });
+  }
 } 

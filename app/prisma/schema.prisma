@@ -21,6 +21,11 @@ model Token {
     totalSupply         BigInt   @default(0) // 新增：当前供应量
     collectedSui        BigInt   @default(0) // 新增：已募集的 SUI 数量
     status              String   @default("FUNDING") // 新增：募资状态 FUNDING/LIQUIDITY_POOL_PENDING/LIQUIDITY_POOL_CREATED
+    poolId              String? // CETUS 池子 ID
+    positionId          String? // CETUS Position ID
+    tickLower           Float? // 流动性范围下限
+    tickUpper           Float? // 流动性范围上限
+    liquidity           String? // 流动性数量
     createdAt           DateTime @default(now())
     updatedAt           DateTime @updatedAt
 }

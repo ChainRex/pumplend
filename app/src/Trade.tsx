@@ -11,8 +11,8 @@ import { useTokenBalance } from "./hooks/useTokenBalance";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Toast } from './components/Toast';
 import { useToast } from './hooks/useToast';
-import { asUintN, TickMath } from '@cetusprotocol/cetus-sui-clmm-sdk';
-import Decimal from 'decimal.js';
+import { useCetusSwap } from './hooks/useCetusSwap';
+import { Confetti } from './components/Confetti';
 
 // 添加错误码常量
 const ERROR_CODES = {
@@ -174,6 +174,34 @@ const compareCoinTypes = (typeA: string, typeB: string): number => {
   return 0;
 };
 
+const usePoolInfo = (tokenType: string | undefined) => {
+  return useQuery({
+    queryKey: ["poolAddress", tokenType],
+    queryFn: async () => {
+      if (!tokenType) return null;
+      const response = await fetch(`http://localhost:3000/api/tokens/${tokenType}/pool`);
+      if (!response.ok) throw new Error("Failed to fetch pool info");
+      return response.json();
+    },
+    enabled: !!tokenType,
+  });
+};
+
+// 添加一个辅助函数来格式化金额
+const formatAmount = (amount: string, decimals: number = 9): string => {
+  // 确保金额字符串至少有 decimals 位
+  const paddedAmount = amount.padStart(decimals + 1, '0');
+  const integerPart = paddedAmount.slice(0, -decimals) || '0';
+  const decimalPart = paddedAmount.slice(-decimals);
+  
+  // 移除末尾的零
+  const trimmedDecimal = decimalPart.replace(/0+$/, '');
+  
+  return trimmedDecimal 
+    ? `${integerPart}.${trimmedDecimal}`
+    : integerPart;
+};
+
 export function Trade() {
   const [fromAmount, setFromAmount] = useState("");
   const [toAmount, setToAmount] = useState("");
@@ -190,6 +218,9 @@ export function Trade() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const [willCreatePool, setWillCreatePool] = useState(false);
   const [previewCollectedSui, setPreviewCollectedSui] = useState<string>();
+  const { preswap, swap } = useCetusSwap();
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [activeInput, setActiveInput] = useState<'from' | 'to' | null>(null);
 
   // 获取 TESTSUI 余额
   const { data: testSuiBalance } = useTokenBalance(
@@ -223,6 +254,12 @@ export function Trade() {
     // 重置进度条预览状态
     setPreviewCollectedSui(undefined);
     setWillCreatePool(false);
+    // 如果有正在进行的预览请求，取消它
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsPreviewLoading(false);
   };
 
   // 处理代币支付的辅助函数
@@ -295,194 +332,324 @@ export function Trade() {
 
     try {
       setIsLoading(true);
-      const tx = new Transaction();
-      
-      const [integerPart, decimalPart = ''] = fromAmount.split('.');
-      const paddedDecimal = (decimalPart + '0'.repeat(9)).slice(0, 9);
-      const amountStr = integerPart + paddedDecimal;
-      const amount = BigInt(amountStr);
-      
-      if (!isTestSuiOnRight) { // TESTSUI 在左边，买入其他代币
-        const treasuryCapHolderId = selectedToken.treasuryCapHolderId;
-        const collateralId = selectedToken.collateralId;
-        
-        if (!treasuryCapHolderId || !collateralId) {
-          throw new Error("Incomplete token information");
+
+      // 如果状态是 LIQUIDITY_POOL_CREATED,使用 CETUS 进行交换
+      if (status === "LIQUIDITY_POOL_CREATED") {
+        if (!poolInfo?.poolId) {
+          throw new Error("Pool not found");
         }
 
-        // 准备 TESTSUI 支付
-        const paymentCoin = await preparePaymentCoin(
-          `${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`,
-          amount,
-          tx
-        );
+        const [integerPart, decimalPart = ''] = fromAmount.split('.');
+        const paddedDecimal = (decimalPart + '0'.repeat(9)).slice(0, 9);
+        const amountStr = integerPart + paddedDecimal;
 
-        // 执行买入
-        tx.moveCall({
-          target: `${PUMPSUI_CORE_PACKAGE_ID}::pumpsui_core::buy`,
-          typeArguments: [selectedToken.type],
-          arguments: [
-            tx.object(collateralId),
-            tx.object(treasuryCapHolderId),
-            paymentCoin,
-          ],
+        // 确定代币顺序
+        const testSuiType = `${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`;
+        const comparison = compareCoinTypes(selectedToken.type, testSuiType);
+        const isTokenCoinA = comparison > 0;
+
+        // 预计算交换结果
+        const preswapResult = await preswap({
+          poolAddress: poolInfo.poolId,
+          coinTypeA: isTokenCoinA ? selectedToken.type : testSuiType,
+          coinTypeB: isTokenCoinA ? testSuiType : selectedToken.type,
+          decimalsA: 9,
+          decimalsB: 9,
+          amount: amountStr,
+          a2b: isTokenCoinA ? isTestSuiOnRight : !isTestSuiOnRight
         });
 
-        // 如果这笔交易会触发创建流动性池，添加创建池子的调用
-        if (willCreatePool) {
-          // 获取完整的 TESTSUI 代币类型
-          const testSuiType = `${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`;
-          const comparison = compareCoinTypes(selectedToken.type, testSuiType);
-          const isTokenCoinA = comparison > 0;
+        // 创建交换交易
+        const swapPayload = await swap({
+          pool: preswapResult.pool,
+          coinTypeA: isTokenCoinA ? selectedToken.type : testSuiType,
+          coinTypeB: isTokenCoinA ? testSuiType : selectedToken.type,
+          amount: amountStr,
+          amountLimit: preswapResult.amountLimit,
+          a2b: isTokenCoinA ? isTestSuiOnRight : !isTestSuiOnRight
+        });
 
-          // 添加创建流动性池的调用
+        // 执行交换
+        await signAndExecute(
+          {
+            transaction: swapPayload,
+          },
+          {
+            onSuccess: async (result) => {
+              showToast('Swap submitted', 'info');
+              
+              // 等待交易完成
+              await suiClient.waitForTransaction({
+                digest: result.digest,
+              });
+
+              // 刷新余额
+              await Promise.all([
+                queryClient.invalidateQueries({
+                  queryKey: ["tokenBalance", currentAccount.address, `${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`],
+                }),
+                queryClient.invalidateQueries({
+                  queryKey: ["tokenBalance", currentAccount.address, selectedToken.type],
+                }),
+              ]);
+
+              showToast(
+                `Successfully swapped ${fromAmount} ${isTestSuiOnRight ? 'TESTSUI' : selectedToken.symbol} for ${formatAmount(preswapResult.estimatedAmount)} ${isTestSuiOnRight ? selectedToken.symbol : 'TESTSUI'}`,
+                'success',
+                result.digest
+              );
+
+              setFromAmount("");
+              setToAmount("");
+              setIsLoading(false);
+            },
+            onError: (error) => {
+              showToast(error.message || 'Swap failed', 'error');
+              setIsLoading(false);
+            }
+          }
+        );
+      } else {
+        const tx = new Transaction();
+        
+        const [integerPart, decimalPart = ''] = fromAmount.split('.');
+        const paddedDecimal = (decimalPart + '0'.repeat(9)).slice(0, 9);
+        const amountStr = integerPart + paddedDecimal;
+        const amount = BigInt(amountStr);
+        
+        if (!isTestSuiOnRight) { // TESTSUI 在左边，买入其他代币
+          const treasuryCapHolderId = selectedToken.treasuryCapHolderId;
+          const collateralId = selectedToken.collateralId;
+          
+          if (!treasuryCapHolderId || !collateralId) {
+            throw new Error("Incomplete token information");
+          }
+
+          // 准备 TESTSUI 支付
+          const paymentCoin = await preparePaymentCoin(
+            `${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`,
+            amount,
+            tx
+          );
+
+          // 执行买入
           tx.moveCall({
-            target: `${PUMPSUI_CORE_PACKAGE_ID}::pumpsui_core::${
-              isTokenCoinA ? 'create_cetus_pool_t_sui' : 'create_cetus_pool_sui_t'
-            }`,
+            target: `${PUMPSUI_CORE_PACKAGE_ID}::pumpsui_core::buy`,
             typeArguments: [selectedToken.type],
             arguments: [
               tx.object(collateralId),
               tx.object(treasuryCapHolderId),
-              tx.object(CETUS_GLOBAL_CONFIG_ID),
-              tx.object(CETUS_POOLS_ID),
-              tx.object(selectedToken.metadataId!),
-              tx.object(TESTSUI_METADATA_ID),
-              tx.object(CLOCK_ID),
+              paymentCoin,
+            ],
+          });
+
+          // 如果这笔交易会触发创建流动性池，添加创建池子的调用
+          if (willCreatePool) {
+            // 获取完整的 TESTSUI 代币类型
+            const testSuiType = `${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`;
+            const comparison = compareCoinTypes(selectedToken.type, testSuiType);
+            const isTokenCoinA = comparison > 0;
+
+            // 添加创建流动性池的调用
+            tx.moveCall({
+              target: `${PUMPSUI_CORE_PACKAGE_ID}::pumpsui_core::${
+                isTokenCoinA ? 'create_cetus_pool_t_sui' : 'create_cetus_pool_sui_t'
+              }`,
+              typeArguments: [selectedToken.type],
+              arguments: [
+                tx.object(collateralId),
+                tx.object(treasuryCapHolderId),
+                tx.object(CETUS_GLOBAL_CONFIG_ID),
+                tx.object(CETUS_POOLS_ID),
+                tx.object(selectedToken.metadataId!),
+                tx.object(TESTSUI_METADATA_ID),
+                tx.object(CLOCK_ID),
+              ],
+            });
+          }
+        } else { // TESTSUI 在边，卖出其他代币
+          const treasuryCapHolderId = selectedToken.treasuryCapHolderId;
+          const collateralId = selectedToken.collateralId;
+          
+          if (!treasuryCapHolderId || !collateralId) {
+            throw new Error("Incomplete token information");
+          }
+
+          // 准备代币支付
+          const paymentCoin = await preparePaymentCoin(
+            selectedToken.type,
+            amount,
+            tx
+          );
+
+          // 执行卖
+          tx.moveCall({
+            target: `${PUMPSUI_CORE_PACKAGE_ID}::pumpsui_core::sell`,
+            typeArguments: [selectedToken.type],
+            arguments: [
+              tx.object(collateralId),
+              tx.object(treasuryCapHolderId),
+              paymentCoin,
             ],
           });
         }
-      } else { // TESTSUI 在边，卖出其他代币
-        const treasuryCapHolderId = selectedToken.treasuryCapHolderId;
-        const collateralId = selectedToken.collateralId;
-        
-        if (!treasuryCapHolderId || !collateralId) {
-          throw new Error("Incomplete token information");
-        }
 
-        // 准备代币支付
-        const paymentCoin = await preparePaymentCoin(
-          selectedToken.type,
-          amount,
-          tx
-        );
+        await signAndExecute(
+          {
+            transaction: tx,
+          },
+          {
+            onSuccess: async (result) => {
+              showToast('Transaction submitted', 'info');
+              
+              // 等交易完成
+              await suiClient.waitForTransaction({
+                digest: result.digest,
+              });
 
-        // 执行卖
-        tx.moveCall({
-          target: `${PUMPSUI_CORE_PACKAGE_ID}::pumpsui_core::sell`,
-          typeArguments: [selectedToken.type],
-          arguments: [
-            tx.object(collateralId),
-            tx.object(treasuryCapHolderId),
-            paymentCoin,
-          ],
-        });
-      }
-
-      await signAndExecute(
-        {
-          transaction: tx,
-        },
-        {
-          onSuccess: async (result) => {
-            showToast('Transaction submitted', 'info');
-            
-            // 等交易完成
-            await suiClient.waitForTransaction({
-              digest: result.digest,
-            });
-
-            // 获取事件
-            const events = await suiClient.queryEvents({
-              query: { 
-                MoveEventType: `${PUMPSUI_CORE_PACKAGE_ID}::pumpsui_core::TokenStatusEvent<${selectedToken.type}>`
-              }
-            });
-            
-            // 查找 TokenStatusEvent
-            const statusEvent = events.data.find(
-              event => event.type.includes('::TokenStatusEvent<')
-            ) as TokenStatusEvent | undefined;
-
-            if (statusEvent && statusEvent.parsedJson) {
-              try {
-                const newTotalSupply = statusEvent.parsedJson.total_supply;
-                const newCollectedSui = statusEvent.parsedJson.collected_sui;
-                const newStatus = statusEvent.parsedJson.status.variant;
-
-                console.log('New token status:', {
-                  type: selectedToken.type,
-                  totalSupply: newTotalSupply,
-                  collectedSui: newCollectedSui,
-                  status: newStatus
-                });
-
-                // 更新数据库
-                await fetch(`http://localhost:3000/api/tokens/${selectedToken.type}/status`, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
+              // 获取事件
+              const events = await suiClient.queryEvents({
+                query: { 
+                  MoveModule: {
+                    package: PUMPSUI_CORE_PACKAGE_ID,
+                    module: 'pumpsui_core'
                   },
-                  body: JSON.stringify({
+                }
+              });
+              
+              // 查找 TokenStatusEvent
+              const statusEvent = events.data.find(
+                event => event.type.includes('::TokenStatusEvent<')
+              ) as TokenStatusEvent | undefined;
+
+              if (statusEvent && statusEvent.parsedJson) {
+                try {
+                  const newTotalSupply = statusEvent.parsedJson.total_supply;
+                  const newCollectedSui = statusEvent.parsedJson.collected_sui;
+                  const newStatus = statusEvent.parsedJson.status.variant;
+
+                  console.log('New token status:', {
+                    type: selectedToken.type,
                     totalSupply: newTotalSupply,
                     collectedSui: newCollectedSui,
                     status: newStatus
-                  })
-                });
+                  });
 
-                // 强制刷新进度条的数据
-                queryClient.invalidateQueries({
-                  queryKey: ["tokenStatus", selectedToken.type],
-                });
+                  // 更新数据库
+                  await fetch(`http://localhost:3000/api/tokens/${selectedToken.type}/status`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      totalSupply: newTotalSupply,
+                      collectedSui: newCollectedSui,
+                      status: newStatus
+                    })
+                  });
 
-                // 立即更新本地状态
-                updateTokenStatus(
-                  selectedToken.type,
-                  newTotalSupply,
-                  newCollectedSui,
-                  newStatus
-                );
+                  // 强制刷新进度条的数据
+                  queryClient.invalidateQueries({
+                    queryKey: ["tokenStatus", selectedToken.type],
+                  });
 
-                // 强制��新渲染
-                queryClient.invalidateQueries({
-                  queryKey: ["tokenBalance"],
-                });
+                  // 即更新本地状态
+                  updateTokenStatus(
+                    selectedToken.type,
+                    newTotalSupply,
+                    newCollectedSui,
+                    newStatus
+                  );
 
-              } catch (error) {
-                console.error('Failed to update token status:', error);
+                  // 强制新渲染
+                  queryClient.invalidateQueries({
+                    queryKey: ["tokenBalance"],
+                  });
+
+                  // 查找 CreatePoolEvent
+                  const createPoolEvent = events.data.find(
+                    event => event.type.includes('::factory::CreatePoolEvent')
+                  );
+
+                  // 查找 OpenPositionEvent
+                  const openPositionEvent = events.data.find(
+                    event => event.type.includes('::pool::OpenPositionEvent')
+                  );
+
+                  // 查找 AddLiquidityEvent
+                  const addLiquidityEvent = events.data.find(
+                    event => event.type.includes('::pool::AddLiquidityEvent')
+                  );
+                  console.log('events', events);
+                  console.log('createPoolEvent', createPoolEvent);
+                  console.log('openPositionEvent', openPositionEvent);
+                  console.log('addLiquidityEvent', addLiquidityEvent);
+
+                  if (createPoolEvent && openPositionEvent && addLiquidityEvent) {
+                    // 更新池子信息
+                    await fetch(`http://localhost:3000/api/tokens/${selectedToken.type}/pool`, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        poolId: (createPoolEvent.parsedJson as any)?.pool_id,
+                        positionId: (openPositionEvent.parsedJson as any)?.position,
+                        tickLower: (openPositionEvent.parsedJson as any)?.tick_lower?.bits,
+                        tickUpper: (openPositionEvent.parsedJson as any)?.tick_upper?.bits,
+                        liquidity: (addLiquidityEvent.parsedJson as any)?.after_liquidity
+                      })
+                    });
+
+                    // 强制刷新池子信息
+                    queryClient.invalidateQueries({
+                      queryKey: ["poolAddress", selectedToken.type],
+                    });
+
+                    // 在成功创建流动性池时触发礼花效果
+                    setShowConfetti(true);
+                    // 5秒后自隐藏礼花
+                    setTimeout(() => {
+                      setShowConfetti(false);
+                    }, 5000);
+                  }
+
+                } catch (error) {
+                  console.error('Failed to update token status:', error);
+                }
               }
-            }
 
-            // 刷新余额
-            await Promise.all([
-              queryClient.invalidateQueries({
-                queryKey: ["tokenBalance", currentAccount.address, `${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`],
-              }),
-              selectedToken.type && queryClient.invalidateQueries({
-                queryKey: ["tokenBalance", currentAccount.address, selectedToken.type],
-              }),
-            ]);
+              // 刷新余额
+              await Promise.all([
+                queryClient.invalidateQueries({
+                  queryKey: ["tokenBalance", currentAccount.address, `${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`],
+                }),
+                selectedToken.type && queryClient.invalidateQueries({
+                  queryKey: ["tokenBalance", currentAccount.address, selectedToken.type],
+                }),
+              ]);
 
-            // 显示成功信息
-            showToast(
-              isTestSuiOnRight 
-                ? `Successfully sold ${fromAmount} ${selectedToken?.symbol}`
-                : `Successfully used ${fromAmount} TESTSUI to buy ${selectedToken?.symbol}`,
-              'success',
-              result.digest
-            );
+              // 显示成功信息
+              showToast(
+                isTestSuiOnRight 
+                  ? `Successfully sold ${fromAmount} ${selectedToken?.symbol}`
+                  : `Successfully used ${fromAmount} TESTSUI to buy ${selectedToken?.symbol}`,
+                'success',
+                result.digest
+              );
 
-            // 清空输入
-            setFromAmount("");
-            setToAmount("");
-            setIsLoading(false);
-          },
-          onError: (error) => {
-            showToast(error.message || 'Transaction failed', 'error');
-            setIsLoading(false);
-          },
-        }
-      );
+              // 清空输入
+              setFromAmount("");
+              setToAmount("");
+              setIsLoading(false);
+            },
+            onError: (error) => {
+              showToast(error.message || 'Transaction failed', 'error');
+              setIsLoading(false);
+            },
+          }
+        );
+      }
     } catch (error: any) {
       // 检查是否 Move 错误
       const moveError = parseMoveError(error.message);
@@ -540,6 +707,18 @@ export function Trade() {
       onValueChange={(value) => {
         const token = tokens?.find(t => t.symbol === value);
         setSelectedToken(token || null);
+        // 清空输入值
+        setFromAmount("");
+        setToAmount("");
+        // 重置进度条预览状态
+        setPreviewCollectedSui(undefined);
+        setWillCreatePool(false);
+        // 如果有正在进行的预览请求，取消它
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+          abortControllerRef.current = null;
+        }
+        setIsPreviewLoading(false);
       }}
     >
       <Select.Trigger className="token-select">
@@ -597,10 +776,11 @@ export function Trade() {
 
     const newAmount = e.target.value;
     setFromAmount(newAmount);
+    setActiveInput('from');
     
     if (!newAmount) {
       setToAmount("");
-      setWillCreatePool(false); // 清空输入时，重置创建流动性池的状态
+      setWillCreatePool(false);
       setPreviewCollectedSui(undefined);
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
@@ -610,36 +790,37 @@ export function Trade() {
       return;
     }
     
-    previewTrade(newAmount);
+    previewTrade(newAmount, true);
   };
 
-  // 修改 handleSwapButtonClick 函数
-  const handleSwapButtonClick = () => {
-    if (!currentAccount) {
-      document.querySelector<HTMLButtonElement>('.wallet-button')?.click();
+  // 添加 handleToAmountChange 函数
+  const handleToAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // 只有在 LIQUIDITY_POOL_CREATED 状态下才允许输入
+    if (status !== "LIQUIDITY_POOL_CREATED") {
       return;
     }
 
-    handleTrade();
+    const newAmount = e.target.value;
+    setToAmount(newAmount);
+    setActiveInput('to');
+    
+    if (!newAmount) {
+      setFromAmount("");
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      setIsPreviewLoading(false);
+      return;
+    }
+    
+    previewTrade(newAmount, false);
   };
 
-  // 修改 isSwapButtonDisabled 函数
-  const isSwapButtonDisabled = () => {
-    if (!currentAccount) {
-      return !(fromAmount && selectedToken);
-    }
-
-    if (status === "LIQUIDITY_POOL_PENDING") {
-      return false; // 允许点击创建流动性池按钮
-    }
-
-    return !selectedToken || !fromAmount || isLoading || isPreviewLoading || !toAmount;
-  };
-
-  // 修改 previewTrade 函数
-  const previewTrade = async (amount: string) => {
+  // 修改 previewTrade 函数，添加 byAmountIn 参数
+  const previewTrade = async (amount: string, byAmountIn: boolean = true) => {
     if (!currentAccount || !selectedToken || !amount) {
-      setToAmount("");
+      byAmountIn ? setToAmount("") : setFromAmount("");
       setWillCreatePool(false);
       setPreviewCollectedSui(undefined);
       return;
@@ -648,7 +829,7 @@ export function Trade() {
     // 检查输入值是否为 0
     const numericAmount = Number(amount);
     if (numericAmount === 0) {
-      setToAmount("");
+      byAmountIn ? setToAmount("") : setFromAmount("");
       setWillCreatePool(false);
       setPreviewCollectedSui(undefined);
       return;
@@ -672,9 +853,46 @@ export function Trade() {
         return;
       }
 
+      // 如果是已创建流动性池的状态,使用 CETUS 预览
+      if (status === "LIQUIDITY_POOL_CREATED") {
+        if (!poolInfo?.poolId) {
+          throw new Error("Pool not found");
+        }
+
+        const [integerPart, decimalPart = ''] = amount.split('.');
+        const paddedDecimal = (decimalPart + '0'.repeat(9)).slice(0, 9);
+        const amountStr = integerPart + paddedDecimal;
+
+        // 确定代币顺序
+        const testSuiType = `${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`;
+        const comparison = compareCoinTypes(selectedToken.type, testSuiType);
+        const isTokenCoinA = comparison > 0;
+
+        // 预计算交换结果
+        const preswapResult = await preswap({
+          poolAddress: poolInfo.poolId,
+          coinTypeA: isTokenCoinA ? selectedToken.type : testSuiType,
+          coinTypeB: isTokenCoinA ? testSuiType : selectedToken.type,
+          decimalsA: 9,
+          decimalsB: 9,
+          amount: amountStr,
+          a2b: isTokenCoinA ? isTestSuiOnRight : !isTestSuiOnRight,
+          byAmountIn
+        });
+
+        // 格式化预计交换金额
+        const formattedAmount = formatAmount(preswapResult.estimatedAmount);
+        if (byAmountIn) {
+          setToAmount(formattedAmount);
+        } else {
+          setFromAmount(formattedAmount);
+        }
+        return;
+      }
+
+      // 原有的募资阶段预览逻辑
       const tx = new Transaction();
       
-      // 计算输入额
       const [integerPart, decimalPart = ''] = amount.split('.');
       const paddedDecimal = (decimalPart + '0'.repeat(9)).slice(0, 9);
       const amountStr = integerPart + paddedDecimal;
@@ -682,7 +900,7 @@ export function Trade() {
 
       // 如果转换后的 BigInt 为 0，直接返回
       if (amountBigInt === BigInt(0)) {
-        setToAmount("");
+        byAmountIn ? setToAmount("") : setFromAmount("");
         setWillCreatePool(false);
         setPreviewCollectedSui(undefined);
         return;
@@ -694,7 +912,7 @@ export function Trade() {
         
         if (!treasuryCapHolderId || !collateralId) {
           showToast('Incomplete token information', 'error');
-          setToAmount("");
+          byAmountIn ? setToAmount("") : setFromAmount("");
           return;
         }
 
@@ -722,7 +940,7 @@ export function Trade() {
         
         if (!treasuryCapHolderId || !collateralId) {
           showToast('Incomplete token information', 'error');
-          setToAmount("");
+          byAmountIn ? setToAmount("") : setFromAmount("");
           return;
         }
 
@@ -746,7 +964,7 @@ export function Trade() {
       }
 
       tx.setSender(currentAccount.address);
-      // 执行模拟交易
+      // 执行模交易
       const dryRunResult = await suiClient.dryRunTransactionBlock({
         transactionBlock: await tx.build({ client: suiClient }),
       });
@@ -837,11 +1055,11 @@ export function Trade() {
       setWillCreatePool(false); // 发生错误时，重置创建流动性池的状态
       const moveError = parseMoveError(error.message);
       if (moveError) {
-        setToAmount("");
+        byAmountIn ? setToAmount("") : setFromAmount("");
         showToast(moveError, 'error');
       } else {
         console.error('Preview error:', error);
-        setToAmount("");
+        byAmountIn ? setToAmount("") : setFromAmount("");
         showToast(error.message || 'Preview failed', 'error');
       }
     } finally {
@@ -870,8 +1088,76 @@ export function Trade() {
     }
   }, [currentAccount]); // 只监听 currentAccount 的变化
 
+  const { data: poolInfo } = usePoolInfo(
+    selectedToken?.type && status === "LIQUIDITY_POOL_CREATED" 
+      ? selectedToken.type 
+      : undefined
+  );
+
+  // 添加 handleSwapButtonClick 函数
+  const handleSwapButtonClick = () => {
+    if (!currentAccount) {
+      document.querySelector<HTMLButtonElement>('.wallet-button')?.click();
+      return;
+    }
+
+    handleTrade();
+  };
+
+  // 添加 isSwapButtonDisabled 函数
+  const isSwapButtonDisabled = () => {
+    if (!currentAccount) {
+      return !(fromAmount && selectedToken);
+    }
+
+    if (status === "LIQUIDITY_POOL_PENDING") {
+      return false; // 允许点击创建流动性池按钮
+    }
+
+    // 如果是 CETUS 交易模式，需要检查输入框的值
+    if (status === "LIQUIDITY_POOL_CREATED") {
+      return !selectedToken || 
+             (!fromAmount && !toAmount) || 
+             isLoading || 
+             isPreviewLoading;
+    }
+
+    // 募资阶段的检查
+    return !selectedToken || !fromAmount || isLoading || isPreviewLoading || !toAmount;
+  };
+
+  // 添加处理百分比选择的函数
+  const handlePercentageClick = (percentage: number) => {
+    if (!currentAccount) return;
+    
+    const balance = !isTestSuiOnRight ? testSuiBalance?.raw : selectedTokenBalance?.raw;
+    if (balance) {
+      const amount = (BigInt(balance) * BigInt(percentage)) / BigInt(100);
+      // 使用字符串操作来保持精度
+      const amountStr = amount.toString();
+      const length = amountStr.length;
+      
+      let newAmount: string;
+      if (length <= 9) {
+        // 如果长度小于9，需要在小数点后补零
+        const decimals = '0'.repeat(9 - length);
+        newAmount = `0.${decimals}${amountStr}`;
+      } else {
+        // 如果长度大于9，在适当位置插入小数点
+        const integerPart = amountStr.slice(0, length - 9);
+        const decimalPart = amountStr.slice(length - 9);
+        newAmount = `${integerPart}.${decimalPart}`;
+      }
+      
+      setFromAmount(newAmount);
+      previewTrade(newAmount, true);
+    }
+  };
+
   return (
     <Container size="1">
+      {showConfetti && <Confetti />}
+      
       <Flex direction="column" gap="4">
         <Flex justify="between" align="center">
           <Text size="5" weight="bold">Swap</Text>
@@ -895,29 +1181,32 @@ export function Trade() {
               )}
             </Flex>
             <Flex gap="2" align="center">
-              <Flex gap="2" align="center">
-                <input 
-                  className="text-field"
-                  placeholder="0"
-                  value={fromAmount}
-                  onChange={handleFromAmountChange}
-                  disabled={status === "LIQUIDITY_POOL_PENDING" && !isTestSuiOnRight}
-                />
-                {currentAccount && (
-                  <Button 
-                    size="1" 
-                    variant="ghost" 
-                    onClick={handleMaxClick}
-                    className="max-button"
-                  >
-                    MAX
-                  </Button>
-                )}
-              </Flex>
-              <Box style={{ width: '10px' }} />
+              <input 
+                className="text-field"
+                placeholder="0"
+                value={fromAmount}
+                onChange={handleFromAmountChange}
+                disabled={status === "LIQUIDITY_POOL_PENDING" && !isTestSuiOnRight}
+              />
               {isTestSuiOnRight ? <OtherTokenSelect /> : <TestSuiToken />}
             </Flex>
-            <Text size="2" color="gray">$0.00</Text>
+            <Flex justify="between" align="center">
+              <Text size="2" color="gray">$0.00</Text>
+              {/* 添加百分比按钮组 */}
+              <Flex className="percentage-buttons">
+                {[25, 50, 75, 100].map((percentage) => (
+                  <Button
+                    key={percentage}
+                    size="1"
+                    variant="ghost"
+                    className="percentage-button"
+                    onClick={() => handlePercentageClick(percentage)}
+                  >
+                    {percentage}%
+                  </Button>
+                ))}
+              </Flex>
+            </Flex>
           </Flex>
         </Box>
 
@@ -949,12 +1238,15 @@ export function Trade() {
                 className="text-field"
                 placeholder="0"
                 value={toAmount}
-                readOnly
-                style={{ cursor: 'default' }}
+                onChange={handleToAmountChange}
+                readOnly={status !== "LIQUIDITY_POOL_CREATED"}
+                style={{ cursor: status === "LIQUIDITY_POOL_CREATED" ? 'text' : 'default' }}
               />
               {isTestSuiOnRight ? <TestSuiToken /> : <OtherTokenSelect />}
             </Flex>
-            <Text size="2" color="gray">$0.00</Text>
+            <Flex justify="between" align="center">
+              <Text size="2" color="gray">$0.00</Text>
+            </Flex>
           </Flex>
         </Box>
 

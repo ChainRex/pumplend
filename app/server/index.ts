@@ -90,7 +90,7 @@ app.get('/api/tokens/:type/status', async (req, res) => {
     const token = await DatabaseService.getTokenStatus(type);
     
     if (!token) {
-      return res.status(404).json({ error: '代币不存在' });
+      return res.status(404).json({ error: '代币��存在' });
     }
 
     res.json({
@@ -101,6 +101,50 @@ app.get('/api/tokens/:type/status', async (req, res) => {
   } catch (error) {
     console.error('获取代币状态失败:', error);
     res.status(500).json({ error: '获取代币状态失败' });
+  }
+});
+
+// 更新池子信息
+app.post('/api/tokens/:type/pool', async (req, res) => {
+  try {
+    const { type } = req.params;
+    const {
+      poolId,
+      positionId,
+      tickLower,
+      tickUpper,
+      liquidity
+    } = req.body;
+    
+    const token = await DatabaseService.updateTokenPool(type, {
+      poolId,
+      positionId,
+      tickLower,
+      tickUpper,
+      liquidity
+    });
+    
+    res.json(token);
+  } catch (error) {
+    console.error('Failed to update pool info:', error);
+    res.status(500).json({ error: 'Failed to update pool info' });
+  }
+});
+
+// 获取池子信息
+app.get('/api/tokens/:type/pool', async (req, res) => {
+  try {
+    const { type } = req.params;
+    const poolInfo = await DatabaseService.getTokenPool(type);
+    
+    if (!poolInfo?.poolId) {
+      return res.status(404).json({ error: 'Pool not found' });
+    }
+    
+    res.json(poolInfo);
+  } catch (error) {
+    console.error('Failed to get pool info:', error);
+    res.status(500).json({ error: 'Failed to get pool info' });
   }
 });
 

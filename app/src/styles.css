@@ -410,4 +410,27 @@
     transform: translateY(0);
   }
 }
+
+/* 百分比按钮组样式 */
+.percentage-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.percentage-button {
+  padding: 2px 8px !important;
+  font-size: 12px !important;
+  color: var(--gray-11) !important;
+  transition: all 0.2s !important;
+  height: auto !important;
+  min-width: auto !important;
+  cursor: pointer !important;
+  border-radius: 6px !important;
+}
+
+.percentage-button:hover {
+  color: var(--gray-12) !important;
+  background: var(--gray-a3) !important;
+  transform: scale(1.05);
+}
  
