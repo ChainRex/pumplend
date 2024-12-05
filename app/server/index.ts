@@ -6,7 +6,11 @@ import { DatabaseService } from './services/database';
 const app = express();
 const port = 3000;
 
-app.use(cors());
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 
 app.post('/api/compile-token', async (req, res) => {
@@ -55,7 +59,7 @@ app.get('/api/tokens', async (req, res) => {
   }
 });
 
-// 更新代币状态
+// 更新代币状��
 app.post('/api/tokens/:type/status', async (req, res) => {
   try {
     
@@ -90,7 +94,7 @@ app.get('/api/tokens/:type/status', async (req, res) => {
     const token = await DatabaseService.getTokenStatus(type);
     
     if (!token) {
-      return res.status(404).json({ error: '代币��存在' });
+      return res.status(404).json({ error: '代币不存在' });
     }
 
     res.json({
