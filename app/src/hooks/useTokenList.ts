@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { TESTSUI_PACKAGE_ID, TESTSUI_ICON_URL } from "../config";
+import { TESTSUI_PACKAGE_ID, TESTSUI_ICON_URL, API_BASE_URL } from "../config";
 
 export interface Token {
   id?: string;
@@ -58,7 +58,7 @@ export function useTokenList() {
         }];
 
         try {
-          const response = await fetch("http://localhost:3000/api/tokens");
+          const response = await fetch(`${API_BASE_URL}/tokens`);
           if (!response.ok) {
             throw new Error("获取代币列表失败");
           }

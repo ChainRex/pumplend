@@ -4,7 +4,7 @@ import { useCurrentAccount, useSuiClient, useSignAndExecuteTransaction } from "@
 import { Transaction } from "@mysten/sui/transactions";
 import { useState } from "react";
 import ClipLoader from "react-spinners/ClipLoader";
-import { PUMPSUI_CORE_PACKAGE_ID } from "./config";
+import { PUMPSUI_CORE_PACKAGE_ID, API_BASE_URL } from "./config";
 import { Toast } from './components/Toast';
 import { useToast } from './hooks/useToast';
 
@@ -41,7 +41,7 @@ export function TokenMint() {
       showToast("Compiling token contract...", "info");
 
       // 调用后端API编译合约
-      const response = await fetch('http://localhost:3000/api/compile-token', {
+      const response = await fetch(`${API_BASE_URL}/compile-token`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -200,7 +200,7 @@ export function TokenMint() {
 
             if (collateralObject && treasuryCapHolderObject) {
               // 更新代币信息
-              await fetch('http://localhost:3000/api/tokens', {
+              await fetch(`${API_BASE_URL}/tokens`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',

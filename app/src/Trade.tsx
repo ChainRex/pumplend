@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
 import { PUMPSUI_CORE_PACKAGE_ID, TESTSUI_ICON_URL, TESTSUI_PACKAGE_ID ,
-  CETUS_GLOBAL_CONFIG_ID, CETUS_POOLS_ID, CLOCK_ID, TESTSUI_METADATA_ID} from "./config";
+  CETUS_GLOBAL_CONFIG_ID, CETUS_POOLS_ID, CLOCK_ID, TESTSUI_METADATA_ID, API_BASE_URL} from "./config";
 import { useTokenList, Token } from "./hooks/useTokenList";
 import ClipLoader from "react-spinners/ClipLoader";
 import { useTokenBalance } from "./hooks/useTokenBalance";
@@ -51,7 +51,7 @@ const useTokenStatus = (tokenType: string | undefined) => {
     queryKey: ["tokenStatus", tokenType],
     queryFn: async () => {
       if (!tokenType) return null;
-      const response = await fetch(`http://localhost:3000/api/tokens/${tokenType}/status`);
+      const response = await fetch(`${API_BASE_URL}/tokens/${tokenType}/status`);
       if (!response.ok) throw new Error("Failed to fetch token status");
       return response.json();
     },
@@ -179,7 +179,7 @@ const usePoolInfo = (tokenType: string | undefined) => {
     queryKey: ["poolAddress", tokenType],
     queryFn: async () => {
       if (!tokenType) return null;
-      const response = await fetch(`http://localhost:3000/api/tokens/${tokenType}/pool`);
+      const response = await fetch(`${API_BASE_URL}/tokens/${tokenType}/pool`);
       if (!response.ok) throw new Error("Failed to fetch pool info");
       return response.json();
     },
@@ -536,7 +536,7 @@ export function Trade() {
                   });
 
                   // 更新数据库
-                  await fetch(`http://localhost:3000/api/tokens/${selectedToken.type}/status`, {
+                  await fetch(`${API_BASE_URL}/tokens/${selectedToken.type}/status`, {
                     method: 'POST',
                     headers: {
                       'Content-Type': 'application/json',
@@ -587,7 +587,7 @@ export function Trade() {
 
                   if (createPoolEvent && openPositionEvent && addLiquidityEvent) {
                     // 更新池子信息
-                    await fetch(`http://localhost:3000/api/tokens/${selectedToken.type}/pool`, {
+                    await fetch(`${API_BASE_URL}/tokens/${selectedToken.type}/pool`, {
                       method: 'POST',
                       headers: {
                         'Content-Type': 'application/json',
