@@ -13,6 +13,8 @@ module lending::lending_core {
     use std::string::String;
     use std::type_name::{Self, TypeName};
     use sui::clock;
+    use legato_math::fixed_point64::{Self, FixedPoint64};
+    use legato_math::math_fixed64;
 
     // === 错误码 ===
     const ENotImplement: u64 = 0;
@@ -29,20 +31,40 @@ module lending::lending_core {
     const SUI_LIQUIDATION_THRESHOLD: u64 = 85; // 85%
     const TOKEN_LIQUIDATION_THRESHOLD: u64 = 70; // 70%
 
+    // 储备金率
+    const RESERVE_FACTOR: u128 = 10; // 10%
+
     // 清算奖励
     const LIQUIDATION_BONUS: u64 = 10; // 10%
 
     const DECIMAL: u128 = 1_000_000_000;
 
+    // 利��相关常量
+    const YEAR_MS: u128 = 31_536_000_000; // 一年毫秒数
+    // 利率区段参数
+    const U_OPTIMAL: u128 = 20;  // 20% - 最优利用率
+    // 不同区段的利率(年化)
+    const R_BASE: u128 = 0;      // 0% - 基础利率
+    const R_SLOPE1: u128 = 20;   // 20% - 第一阶段最高利率
+    const R_SLOPE2: u128 = 500;  // 500% - 第二阶段最高利率
+
     // === 结构体 ===
     public struct LendingPool<phantom CoinType> has key {
         id: UID,
-        // 存款总额
-        total_supplies: Balance<CoinType>,
-        // 借款总额
-        total_borrows: Balance<CoinType>,
-        // 累计利率
+        // 储备金
+        reserves: Balance<CoinType>,
+        // 存款总额 
+        total_supplies: u64,
+        // 借款总额 
+        total_borrows: u64,
+        // 借款累计利率
         borrow_index: u64,
+        // 存款累计利率
+        supply_index: u64,
+        // 借款年化利率
+        borrow_rate: u128,
+        // 存款年化利率
+        supply_rate: u128,
         // 最后更新时间
         last_update_time: u64,
     }
@@ -55,6 +77,10 @@ module lending::lending_core {
         supplies: Table<TypeName, u64>,
         // 借款金额 (asset_type => amount)
         borrows: Table<TypeName, u64>,
+        // 存储用户借款时的borrowIndex快照信息
+        borrow_index_snapshots: Table<TypeName, u64>,
+        // 存储用户存款时的supplyIndex快照信息
+        supply_index_snapshots: Table<TypeName, u64>,
     }
 
     public struct AssetInfo has store, copy {
@@ -107,6 +133,25 @@ module lending::lending_core {
         collateral_amount: u64
     }
 
+    public struct CalculateHealthFactorEvent has copy, drop {
+        user: address,
+        health_factor: u64
+    }
+
+    public struct CalculateMaxBorrowValueEvent has copy, drop {
+        user: address,
+        max_borrow_value: u128
+    }
+
+    public struct GetUserPositionEvent has copy, drop {
+        user: address,
+        assets: vector<TypeName>,
+        supplies: vector<u64>,
+        borrows: vector<u64>,
+        borrow_index_snapshots: vector<u64>,
+        supply_index_snapshots: vector<u64>,
+    }
+
     // === init ===
 
     fun init(ctx: &mut TxContext) {
@@ -142,9 +187,13 @@ module lending::lending_core {
         );
         let pool = LendingPool<TESTSUI> {
             id: object::new(ctx),
-            total_supplies: balance::zero<TESTSUI>(),
-            total_borrows: balance::zero<TESTSUI>(),
+            total_supplies: 0,
+            reserves: balance::zero<TESTSUI>(),
+            total_borrows: 0,
             borrow_index: 0,
+            supply_index: 0,
+            borrow_rate: 0,
+            supply_rate: 0,
             last_update_time: clock::timestamp_ms(clock),
         };
         transfer::share_object(pool);
@@ -176,9 +225,13 @@ module lending::lending_core {
         table::add(&mut storage.price, coin_type, price);
         let pool = LendingPool<CoinType> {
             id: object::new(ctx),
-            total_supplies: balance::zero<CoinType>(),
-            total_borrows: balance::zero<CoinType>(),
+            total_supplies: 0,
+            reserves: balance::zero<CoinType>(),
+            total_borrows: 0,
             borrow_index: 0,
+            supply_index: 0,
+            borrow_rate: 0,
+            supply_rate: 0,
             last_update_time: clock::timestamp_ms(clock),
         };
         transfer::share_object(pool);
@@ -208,9 +261,13 @@ module lending::lending_core {
         table::add(&mut storage.price, coin_type, price);
         let pool = LendingPool<CoinType> {
             id: object::new(ctx),
-            total_supplies: balance::zero<CoinType>(),
-            total_borrows: balance::zero<CoinType>(),
+            total_supplies: 0,
+            reserves: balance::zero<CoinType>(),
+            total_borrows: 0,
             borrow_index: 0,
+            supply_index: 0,
+            borrow_rate: 0,
+            supply_rate: 0,
             last_update_time: clock::timestamp_ms(clock),
         };
         transfer::share_object(pool);
@@ -225,6 +282,9 @@ module lending::lending_core {
         amount: u64,
         ctx: &mut TxContext
     ) {
+        // 更新利率
+        update_interest_rate(pool, clock);
+
         let coin_type = type_name::get<TESTSUI>();
         let user = tx_context::sender(ctx);
 
@@ -237,17 +297,18 @@ module lending::lending_core {
         let split_coin = coin::split(supply_coin, amount, ctx);
         let supply_balance = coin::into_balance(split_coin);
 
-        balance::join(
-            &mut pool.total_supplies,
-            supply_balance
-        );
+        // 更新储备金和存款总额
+        balance::join(&mut pool.reserves, supply_balance);
+        pool.total_supplies = pool.total_supplies + amount;
 
         if (!table::contains(&storage.user_positions, user)) {
             let user_position = UserPosition {
                 id: object::new(ctx),
                 user,
                 supplies: table::new(ctx),
-                borrows: table::new(ctx)
+                borrows: table::new(ctx),
+                borrow_index_snapshots: table::new(ctx),
+                supply_index_snapshots: table::new(ctx),
             };
             table::add(
                 &mut storage.user_positions,
@@ -264,12 +325,26 @@ module lending::lending_core {
                 coin_type,
                 amount
             );
+            // 记录存款时的累积利率
+            table::add(
+                &mut user_position.supply_index_snapshots,
+                coin_type,
+                pool.supply_index
+            );
         } else {
+            // 如果已有存款，需要先结算之前的利息
+            let actual_supply = calculate_user_actual_supply_amount(pool, user_position, coin_type);
             let supply_value = table::borrow_mut(
                 &mut user_position.supplies,
                 coin_type
             );
-            *supply_value = *supply_value + amount;
+            *supply_value = actual_supply + amount;
+            // 更新累积利率快照
+            let index_snapshot = table::borrow_mut(
+                &mut user_position.supply_index_snapshots,
+                coin_type
+            );
+            *index_snapshot = pool.supply_index;
         };
 
         event::emit(
@@ -288,10 +363,10 @@ module lending::lending_core {
         amount: u64,
         ctx: &mut TxContext
     ) {
-        let coin_type = type_name::get<TESTSUI>();
         // 更新利率
-        // update_interest_rate(pool, clock);
+        update_interest_rate(pool, clock);
 
+        let coin_type = type_name::get<TESTSUI>();
         // 获取用户地址
         let user = tx_context::sender(ctx);
 
@@ -309,20 +384,45 @@ module lending::lending_core {
             EInsufficientBalance
         );
 
-        let supply_value = table::borrow_mut(
-            &mut user_position.supplies,
-            coin_type
-        );
+        // 计算实际存款金额（包含利息）
+        let actual_supply = calculate_user_actual_supply_amount(pool, user_position, coin_type);
+        
+        // 检查提款金额是否超过实际存款金额
         assert!(
-            *supply_value >= amount,
+            actual_supply >= amount,
             EInsufficientBalance
         );
 
-        // 更新用户存款金额
-        *supply_value = *supply_value - amount;
+        // 更新用户存款记录
+        let remaining_supply = actual_supply - amount;
+        if (remaining_supply == 0) {
+            // 如果全部提取，删除存款记录和累积利率快照
+            table::remove(&mut user_position.supplies, coin_type);
+            table::remove(&mut user_position.supply_index_snapshots, coin_type);
+        } else {
+            // 部分提取，更新存款金额和累积利率快照
+            let supply_value = table::borrow_mut(
+                &mut user_position.supplies,
+                coin_type
+            );
+            *supply_value = remaining_supply;
+            let index_snapshot = table::borrow_mut(
+                &mut user_position.supply_index_snapshots,
+                coin_type
+            );
+            *index_snapshot = pool.supply_index;
+        };
 
-        // 从资金池提取代币
-        let withdraw_balance = balance::split(&mut pool.total_supplies, amount);
+        // 更新存款总额
+        pool.total_supplies = pool.total_supplies - amount;
+
+        assert!(
+            balance::value(&pool.reserves) >= amount,
+            EInsufficientBalance
+        );
+
+        // 从储备金中提取代币
+        let withdraw_balance = balance::split(&mut pool.reserves, amount);
         let withdraw_coin = coin::from_balance(withdraw_balance, ctx);
 
         // 转账给用户
@@ -345,6 +445,9 @@ module lending::lending_core {
         amount: u64,
         ctx: &mut TxContext
     ) {
+        // 更新利率
+        update_interest_rate(pool, clock);
+
         let coin_type = type_name::get<TESTSUI>();
         let user = tx_context::sender(ctx);
 
@@ -356,7 +459,7 @@ module lending::lending_core {
 
         // 检查资金池余额是否足够
         assert!(
-            balance::value(&pool.total_supplies) >= amount,
+            balance::value(&pool.reserves) >= amount,
             EInsufficientPoolBalance
         );
 
@@ -387,12 +490,26 @@ module lending::lending_core {
                 coin_type,
                 amount
             );
+            // 记录借款时的累积利率
+            table::add(
+                &mut user_position.borrow_index_snapshots,
+                coin_type,
+                pool.borrow_index
+            );
         } else {
+            // 如果已有借款，需要先结算之前的利息
+            let actual_borrow = calculate_user_actual_borrow_amount(pool, user_position, coin_type);
             let borrow_value = table::borrow_mut(
                 &mut user_position.borrows,
                 coin_type
             );
-            *borrow_value = *borrow_value + amount;
+            *borrow_value = actual_borrow + amount;
+            // 更新累积利率快照
+            let index_snapshot = table::borrow_mut(
+                &mut user_position.borrow_index_snapshots,
+                coin_type
+            );
+            *index_snapshot = pool.borrow_index;
         };
 
         // 检查健康因子是否满足要求 (大于1)
@@ -402,8 +519,11 @@ module lending::lending_core {
             EInsufficientBalance
         );
 
-        // 从资金池借出代币
-        let borrow_balance = balance::split(&mut pool.total_supplies, amount);
+        // 更新借款总额
+        pool.total_borrows = pool.total_borrows + amount;
+
+        // 从储备金中提取代币
+        let borrow_balance = balance::split(&mut pool.reserves, amount);
         let borrow_coin = coin::from_balance(borrow_balance, ctx);
 
         // 转账给用户
@@ -427,6 +547,9 @@ module lending::lending_core {
         amount: u64,
         ctx: &mut TxContext
     ) {
+        // 更新利率
+        update_interest_rate(pool, clock);
+
         let coin_type = type_name::get<TESTSUI>();
         let user = tx_context::sender(ctx);
 
@@ -452,33 +575,42 @@ module lending::lending_core {
             EInsufficientBalance
         );
 
-        // 如果还款金额大于借款金额，则只还实际借款金额
-        let actual_repay_amount = if (amount > borrow_amount) { borrow_amount } else { amount };
+        // 计算实际借款金额（包含利息）
+        let actual_borrow = calculate_user_actual_borrow_amount(pool, user_position, coin_type);
+        
+        // 如果还款金额大于实际借款金额（包含利息），则只还实际借款金额
+        let actual_repay_amount = if (amount > actual_borrow) { actual_borrow } else { amount };
+        
         // 拆分代币
         let split_coin = coin::split(repay_coin, actual_repay_amount, ctx);
 
         // 更新用户借款记录
         let user_position = table::borrow_mut(&mut storage.user_positions, user);
-        let borrow_value = table::borrow_mut(
-            &mut user_position.borrows,
-            coin_type
-        );
-        *borrow_value = *borrow_value - actual_repay_amount;
-
-        // 如果借款金额为0，则删除该资产的借款记录
-        if (*borrow_value == 0) {
-            table::remove(
+        if (actual_repay_amount == actual_borrow) {
+            // 如果全部还清，删除借款记录和累积利率快照
+            table::remove(&mut user_position.borrows, coin_type);
+            table::remove(&mut user_position.borrow_index_snapshots, coin_type);
+        } else {
+            // 部分还款，更新借款金额和累积利率快照
+            let remaining_borrow = actual_borrow - actual_repay_amount;
+            let borrow_value = table::borrow_mut(
                 &mut user_position.borrows,
                 coin_type
             );
+            *borrow_value = remaining_borrow;
+            let index_snapshot = table::borrow_mut(
+                &mut user_position.borrow_index_snapshots,
+                coin_type
+            );
+            *index_snapshot = pool.borrow_index;
         };
 
-        // 将还款代币存入资金池
+        // 更新借款总额
+        pool.total_borrows = pool.total_borrows - actual_repay_amount;
+
+        // 将还款代币存入储备金
         let repay_balance = coin::into_balance(split_coin);
-        balance::join(
-            &mut pool.total_supplies,
-            repay_balance
-        );
+        balance::join(&mut pool.reserves, repay_balance);
 
         // 发出还款事件
         event::emit(
@@ -498,6 +630,9 @@ module lending::lending_core {
         amount: u64,
         ctx: &mut TxContext
     ) {
+        // 更新利率
+        update_interest_rate(pool, clock);
+
         let coin_type = type_name::get<CoinType>();
 
         // 获取用户地址
@@ -515,10 +650,7 @@ module lending::lending_core {
 
         // 将代币存入资金池
         let supply_balance = coin::into_balance(split_coin);
-        balance::join(
-            &mut pool.total_supplies,
-            supply_balance
-        );
+        balance::join(&mut pool.reserves, supply_balance);
 
         // 更新用户仓位
         if (!table::contains(&storage.user_positions, user)) {
@@ -526,7 +658,9 @@ module lending::lending_core {
                 id: object::new(ctx),
                 user,
                 supplies: table::new(ctx),
-                borrows: table::new(ctx)
+                borrows: table::new(ctx),
+                borrow_index_snapshots: table::new(ctx),
+                supply_index_snapshots: table::new(ctx),
             };
             table::add(
                 &mut storage.user_positions,
@@ -543,13 +677,30 @@ module lending::lending_core {
                 coin_type,
                 amount
             );
+            // 记录存款时的累积利率
+            table::add(
+                &mut user_position.supply_index_snapshots,
+                coin_type,
+                pool.supply_index
+            );
         } else {
+            // 如果已有存款，需要先结算之前的利息
+            let actual_supply = calculate_user_actual_supply_amount(pool, user_position, coin_type);
             let supply_value = table::borrow_mut(
                 &mut user_position.supplies,
                 coin_type
             );
-            *supply_value = *supply_value + amount;
+            *supply_value = actual_supply + amount;
+            // 更新累积利率快照
+            let index_snapshot = table::borrow_mut(
+                &mut user_position.supply_index_snapshots,
+                coin_type
+            );
+            *index_snapshot = pool.supply_index;
         };
+
+        // 更新存款总额
+        pool.total_supplies = pool.total_supplies + amount;
 
         // 发出存款事件
         event::emit(
@@ -568,9 +719,10 @@ module lending::lending_core {
         amount: u64,
         ctx: &mut TxContext
     ) {
-        let coin_type = type_name::get<CoinType>();
+        // 更新利率
+        update_interest_rate(pool, clock);
 
-        // 获取用户地址
+        let coin_type = type_name::get<CoinType>();
         let user = tx_context::sender(ctx);
 
         // 检查用户是否有仓位
@@ -587,20 +739,45 @@ module lending::lending_core {
             EInsufficientBalance
         );
 
-        let supply_value = table::borrow_mut(
-            &mut user_position.supplies,
-            coin_type
-        );
+        // 计算实际存款金额（包含利息）
+        let actual_supply = calculate_user_actual_supply_amount(pool, user_position, coin_type);
+        
+        // 检查提款金额是否超过实际存款金额
         assert!(
-            *supply_value >= amount,
+            actual_supply >= amount,
             EInsufficientBalance
         );
 
-        // 更新用户存款金额
-        *supply_value = *supply_value - amount;
+        // 更新用户存款记录
+        let remaining_supply = actual_supply - amount;
+        if (remaining_supply == 0) {
+            // 如果全部提取，删除存款记录和累积利率快照
+            table::remove(&mut user_position.supplies, coin_type);
+            table::remove(&mut user_position.supply_index_snapshots, coin_type);
+        } else {
+            // 部分提取，更新存款金额和累积利率快照
+            let supply_value = table::borrow_mut(
+                &mut user_position.supplies,
+                coin_type
+            );
+            *supply_value = remaining_supply;
+            let index_snapshot = table::borrow_mut(
+                &mut user_position.supply_index_snapshots,
+                coin_type
+            );
+            *index_snapshot = pool.supply_index;
+        };
 
-        // 从资金池提取代币
-        let withdraw_balance = balance::split(&mut pool.total_supplies, amount);
+        // 更新存款总额
+        pool.total_supplies = pool.total_supplies - amount;
+
+        assert!(
+            balance::value(&pool.reserves) >= amount,
+            EInsufficientBalance
+        );
+
+        // 从储备金中提取代币
+        let withdraw_balance = balance::split(&mut pool.reserves, amount);
         let withdraw_coin = coin::from_balance(withdraw_balance, ctx);
 
         // 转账给用户
@@ -623,6 +800,9 @@ module lending::lending_core {
         amount: u64,
         ctx: &mut TxContext
     ) {
+        // 更新利率
+        update_interest_rate(pool, clock);
+
         let coin_type = type_name::get<CoinType>();
         let user = tx_context::sender(ctx);
 
@@ -634,7 +814,7 @@ module lending::lending_core {
 
         // 检查资金池余额是否足够
         assert!(
-            balance::value(&pool.total_supplies) >= amount,
+            balance::value(&pool.reserves) >= amount,
             EInsufficientPoolBalance
         );
 
@@ -666,12 +846,26 @@ module lending::lending_core {
                 coin_type,
                 amount
             );
+            // 记录借款时的累积利率
+            table::add(
+                &mut user_position.borrow_index_snapshots,
+                coin_type,
+                pool.borrow_index
+            );
         } else {
+            // 如果已有借款，需要先结算之前的利息
+            let actual_borrow = calculate_user_actual_borrow_amount(pool, user_position, coin_type);
             let borrow_value = table::borrow_mut(
                 &mut user_position.borrows,
                 coin_type
             );
-            *borrow_value = *borrow_value + amount;
+            *borrow_value = actual_borrow + amount;
+            // 更新累积利率快照
+            let index_snapshot = table::borrow_mut(
+                &mut user_position.borrow_index_snapshots,
+                coin_type
+            );
+            *index_snapshot = pool.borrow_index;
         };
 
         // 检查健康因子是否满足要求 (大于1)
@@ -681,8 +875,11 @@ module lending::lending_core {
             EInsufficientBalance
         );
 
+        // 更新借款总额
+        pool.total_borrows = pool.total_borrows + amount;
+
         // 从资金池借出代币
-        let borrow_balance = balance::split(&mut pool.total_supplies, amount);
+        let borrow_balance = balance::split(&mut pool.reserves, amount);
         let borrow_coin = coin::from_balance(borrow_balance, ctx);
 
         // 转账给用户
@@ -706,6 +903,9 @@ module lending::lending_core {
         amount: u64,
         ctx: &mut TxContext
     ) {
+        // 更新利率
+        update_interest_rate(pool, clock);
+
         let coin_type = type_name::get<CoinType>();
         let user = tx_context::sender(ctx);
 
@@ -731,34 +931,42 @@ module lending::lending_core {
             EInsufficientBalance
         );
 
-        // 如果还款金额大于借款金额，则只还实际借款金额
-        let actual_repay_amount = if (amount > borrow_amount) { borrow_amount } else { amount };
-
+        // 计算实际借款金额（包含利息）
+        let actual_borrow = calculate_user_actual_borrow_amount(pool, user_position, coin_type);
+        
+        // 如果还款金额大于实际借款金额（包含利息），则只还实际借款金额
+        let actual_repay_amount = if (amount > actual_borrow) { actual_borrow } else { amount };
+        
         // 拆分代币
         let split_coin = coin::split(repay_coin, actual_repay_amount, ctx);
 
         // 更新用户借款记录
         let user_position = table::borrow_mut(&mut storage.user_positions, user);
-        let borrow_value = table::borrow_mut(
-            &mut user_position.borrows,
-            coin_type
-        );
-        *borrow_value = *borrow_value - actual_repay_amount;
-
-        // 如果借款金额为0，则删除该资产的借款记录
-        if (*borrow_value == 0) {
-            table::remove(
+        if (actual_repay_amount == actual_borrow) {
+            // 如果全部还清，删除借款记录和累积利率快照
+            table::remove(&mut user_position.borrows, coin_type);
+            table::remove(&mut user_position.borrow_index_snapshots, coin_type);
+        } else {
+            // 部分还款，更新借款金额和累积利率快照
+            let remaining_borrow = actual_borrow - actual_repay_amount;
+            let borrow_value = table::borrow_mut(
                 &mut user_position.borrows,
                 coin_type
             );
+            *borrow_value = remaining_borrow;
+            let index_snapshot = table::borrow_mut(
+                &mut user_position.borrow_index_snapshots,
+                coin_type
+            );
+            *index_snapshot = pool.borrow_index;
         };
+
+        // 更新借款总额
+        pool.total_borrows = pool.total_borrows - actual_repay_amount;
 
         // 将还款代币存入资金池
         let repay_balance = coin::into_balance(split_coin);
-        balance::join(
-            &mut pool.total_supplies,
-            repay_balance
-        );
+        balance::join(&mut pool.reserves, repay_balance);
 
         // 发出还款事件
         event::emit(
@@ -804,7 +1012,62 @@ module lending::lending_core {
         abort ENotImplement
     }
 
-    public fun calculate_health_factor(
+
+    public entry fun get_user_position(
+        storage: &LendingStorage,
+        user: address
+    ) {
+        let user_position = table::borrow(&storage.user_positions, user);
+        let mut assets: vector<TypeName> = vector::empty();
+        let mut supplies: vector<u64> = vector::empty();
+        let mut borrows: vector<u64> = vector::empty();
+        let mut borrow_index_snapshots: vector<u64> = vector::empty();
+        let mut supply_index_snapshots: vector<u64> = vector::empty();
+
+        let mut i = 0;
+        let assets_len = vector::length(&storage.supported_assets);
+        while (i < assets_len) {
+            let asset_info = vector::borrow(&storage.supported_assets, i);
+            if (table::contains(
+                    &user_position.supplies,
+                    asset_info.type_name
+                )) {
+                vector::push_back(&mut assets, asset_info.type_name);
+                vector::push_back(&mut supplies, *table::borrow(
+                    &user_position.supplies,
+                    asset_info.type_name
+                ));
+                vector::push_back(&mut supply_index_snapshots, *table::borrow(
+                    &user_position.supply_index_snapshots,
+                    asset_info.type_name
+                ));
+            };
+            if (table::contains(
+                    &user_position.borrows,
+                    asset_info.type_name
+                )) {
+                vector::push_back(&mut assets, asset_info.type_name);
+                vector::push_back(&mut borrows, *table::borrow(
+                    &user_position.borrows,
+                    asset_info.type_name
+                ));
+            };
+            i = i + 1;
+        };
+        event::emit(
+            GetUserPositionEvent {
+                user,
+                assets,
+                supplies,
+                borrows,
+                borrow_index_snapshots,
+                supply_index_snapshots,
+            }
+        );
+    }
+
+    // 计算健康因子
+    public entry fun calculate_health_factor(
         storage: &LendingStorage,
         user: address
     ): u64 {
@@ -874,6 +1137,12 @@ module lending::lending_core {
         if (total_borrows_in_sui == 0) {
             return 1000000
         };
+        event::emit(
+            CalculateHealthFactorEvent {
+                user,
+                health_factor: ((total_collateral_in_threshold * 100) / total_borrows_in_sui) as u64
+            }
+        );
 
         // 计算健康因子 (扩大100倍以保持精度)
         (
@@ -881,17 +1150,8 @@ module lending::lending_core {
         )
     }
 
-    // === 内部函数 ===
-
-    fun update_interest_rate<CoinType>(
-        pool: &mut LendingPool<CoinType>,
-        clock: &Clock
-    ) {
-        abort ENotImplement
-    }
-
-    // 添加一个计算最大可借款价值的函数
-    public fun calculate_max_borrow_value(
+    // 计算最大可借款价值的函数
+    public entry fun calculate_max_borrow_value(
         storage: &LendingStorage,
         user: address
     ): u128 {
@@ -929,8 +1189,176 @@ module lending::lending_core {
             };
             i = i + 1;
         };
-
+        event::emit(
+            CalculateMaxBorrowValueEvent {
+                user,
+                max_borrow_value: total_collateral_in_ltv
+            }
+        );
         total_collateral_in_ltv
+    }
+
+    
+
+    // === 内部函数 ===
+
+    // 利率计算相关函数
+    fun compute_borrow_rate<CoinType>(pool: &LendingPool<CoinType>) : u128 {
+        let total_supplies = pool.total_supplies;
+        let total_borrows = pool.total_borrows;
+        
+        // 当没有存款时返回基础利率
+        if (total_supplies == 0) {
+            return R_BASE
+        };
+
+        // 计算利用率 (放大到DECIMAL)
+        let utilization_rate = ((total_borrows as u128) * DECIMAL) / (total_supplies as u128);
+        
+        // 当没有借款时返回基础利率
+        if (utilization_rate == 0) {
+            return R_BASE
+        };
+
+        // 将利用率转换为百分比 (0-100)
+        let utilization_rate_percent = utilization_rate * 100 / DECIMAL;
+
+        if (utilization_rate_percent <= U_OPTIMAL) {
+            // 第一阶段：线性增长
+            // rate = (r_slope1 * u) / u_optimal
+            return (R_SLOPE1 * utilization_rate_percent) / U_OPTIMAL
+        } else {
+            // 第二阶段：指数增长
+            // 计算超出最优利用率的部分
+            let excess_utilization = fixed_point64::create_from_rational(
+                utilization_rate_percent - U_OPTIMAL,
+                100 - U_OPTIMAL
+            );
+            
+            // 使用e^x计算指数部分
+            let exp_part = math_fixed64::exp(excess_utilization);
+            
+            // 将结果转换为利率
+            // rate = r_slope1 + (r_slope2 - r_slope1) * exp_factor
+            let exp_factor = fixed_point64::get_raw_value(exp_part);
+            let rate = R_SLOPE1 + ((R_SLOPE2 - R_SLOPE1) * exp_factor) / (1u128 << 64);
+            
+            if (rate > R_SLOPE2) {
+                R_SLOPE2
+            } else {
+                rate
+            }
+        }
+    }
+
+    // 计算存款年化利率
+    fun compute_supply_rate<CoinType>(pool: &LendingPool<CoinType>) : u128 {
+        let total_supplies = pool.total_supplies;
+        let total_borrows = pool.total_borrows;
+        
+        if (total_supplies == 0) {
+            return 0
+        };
+
+        // 计算利用率
+        let utilization_rate = ((total_borrows as u128) * DECIMAL) / (total_supplies as u128);
+        
+        // 计算借款利率
+        let borrow_rate = compute_borrow_rate(pool);
+        
+        // 存款利率 = 借款利率 * 利用率 * (1 - 储备金率)
+        ((borrow_rate * utilization_rate * (100 - RESERVE_FACTOR)) / (100 * DECIMAL))
+    }
+
+    // 利息因子计算函数
+    fun calc_borrow_rate(annual_rate_percentage: u128, time_delta: u64) : u128 {
+        (annual_rate_percentage * (time_delta as u128) * DECIMAL) / (100 * YEAR_MS)
+    }
+
+    // 利率更新函数
+    fun update_interest_rate<CoinType>(
+        pool: &mut LendingPool<CoinType>, 
+        clock: &Clock
+    ) {
+        let current_time = clock::timestamp_ms(clock);
+        if (pool.last_update_time == current_time) {
+            return
+        };
+
+        let time_delta = current_time - pool.last_update_time;
+        
+        // 计算借款和存款年化利率
+        let borrow_rate = compute_borrow_rate(pool);
+        let supply_rate = compute_supply_rate(pool);
+        
+        // 计算这段时间的实际利率
+        let actual_borrow_rate = calc_borrow_rate(borrow_rate, time_delta);
+        let actual_supply_rate = calc_borrow_rate(supply_rate, time_delta);
+
+        // 更新总借款金额
+        let new_total_borrows = (
+            (pool.total_borrows as u128) * (DECIMAL + actual_borrow_rate)
+        ) / DECIMAL;
+        pool.total_borrows = (new_total_borrows as u64);
+
+        // 更新借款累积利率
+        let old_borrow_index = pool.borrow_index as u128;
+        let new_borrow_index = (old_borrow_index * (DECIMAL + actual_borrow_rate)) / DECIMAL;
+        pool.borrow_index = (new_borrow_index as u64);
+
+        // 更新存款累积利率
+        let old_supply_index = pool.supply_index as u128;
+        let new_supply_index = (old_supply_index * (DECIMAL + actual_supply_rate)) / DECIMAL;
+        pool.supply_index = (new_supply_index as u64);
+
+        // 更新年化利率
+        pool.borrow_rate = borrow_rate;
+        pool.supply_rate = supply_rate;
+        
+        // 更新最后计息时间
+        pool.last_update_time = current_time;
+    }
+
+    // 计算用户实际借款金额（包含利息）
+    fun calculate_user_actual_borrow_amount<CoinType>(
+        pool: &LendingPool<CoinType>,
+        user_position: &UserPosition,
+        coin_type: TypeName
+    ): u64 {
+        if (!table::contains(&user_position.borrows, coin_type)) {
+            return 0
+        };
+
+        let borrow_amount = *table::borrow(&user_position.borrows, coin_type);
+        let user_borrow_index = *table::borrow(&user_position.borrow_index_snapshots, coin_type);
+        
+        // 计算实际借款金额：原始借款金额 * (当前累积利率 / 借款时的累积利率)
+        let actual_amount = (
+            (borrow_amount as u128) * (pool.borrow_index as u128)
+        ) / (user_borrow_index as u128);
+        
+        (actual_amount as u64)
+    }
+
+    // 计算用户实际存款金额（包含利息）
+    fun calculate_user_actual_supply_amount<CoinType>(
+        pool: &LendingPool<CoinType>,
+        user_position: &UserPosition,
+        coin_type: TypeName
+    ): u64 {
+        if (!table::contains(&user_position.supplies, coin_type)) {
+            return 0
+        };
+
+        let supply_amount = *table::borrow(&user_position.supplies, coin_type);
+        let user_supply_index = *table::borrow(&user_position.supply_index_snapshots, coin_type);
+        
+        // 计算实际存款金额：原始存款金额 * (当前累积利率 / 存款时的累积利率)
+        let actual_amount = (
+            (supply_amount as u128) * (pool.supply_index as u128)
+        ) / (user_supply_index as u128);
+        
+        (actual_amount as u64)
     }
 
 }
