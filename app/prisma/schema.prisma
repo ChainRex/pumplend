@@ -17,10 +17,10 @@ model Token {
     decimals            Int      @default(9)
     treasuryCapHolderId String
     collateralId        String
-    metadataId          String // 新增：代币的 metadata ID
-    totalSupply         BigInt   @default(0) // 新增：当前供应量
-    collectedSui        BigInt   @default(0) // 新增：已募集的 SUI 数量
-    status              String   @default("FUNDING") // 新增：募资状态 FUNDING/LIQUIDITY_POOL_PENDING/LIQUIDITY_POOL_CREATED
+    metadataId          String // 代币的 metadata ID
+    totalSupply         BigInt   @default(0)
+    collectedSui        BigInt   @default(0)
+    status              String   @default("FUNDING") // FUNDING/LIQUIDITY_POOL_PENDING/LIQUIDITY_POOL_CREATED
     poolId              String? // CETUS 池子 ID
     positionId          String? // CETUS Position ID
     tickLower           Float? // 流动性范围下限
@@ -28,4 +28,18 @@ model Token {
     liquidity           String? // 流动性数量
     createdAt           DateTime @default(now())
     updatedAt           DateTime @updatedAt
+}
+
+// 借贷池信息
+model Lending {
+    id            String   @id @default(uuid())
+    name          String
+    symbol        String
+    type          String   @unique
+    icon          String
+    decimals      Int      @default(9)
+    metadataId    String // 代币的 metadata ID
+    lendingPoolId String // Lending Pool 对象 ID
+    createdAt     DateTime @default(now())
+    updatedAt     DateTime @updatedAt
 }

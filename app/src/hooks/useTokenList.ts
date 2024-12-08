@@ -7,13 +7,14 @@ export interface Token {
   symbol: string;
   type: string;
   icon: string;
-  decimals?: number;
+  decimals: number;
   treasuryCapHolderId?: string;
   collateralId?: string;
   metadataId?: string;
   totalSupply?: bigint;
   collectedSui?: bigint;
   status?: string;
+  poolId?: string;
 }
 
 export function useTokenList() {

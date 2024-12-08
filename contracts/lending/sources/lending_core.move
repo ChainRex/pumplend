@@ -39,14 +39,14 @@ module lending::lending_core {
 
     const DECIMAL: u128 = 1_000_000_000;
 
-    // 利��相关常量
+    // 利率相关常量
     const YEAR_MS: u128 = 31_536_000_000; // 一年毫秒数
     // 利率区段参数
-    const U_OPTIMAL: u128 = 20;  // 20% - 最优利用率
+    const U_OPTIMAL: u128 = 5000;  // 50.00% - 最优利用率
     // 不同区段的利率(年化)
-    const R_BASE: u128 = 0;      // 0% - 基础利率
-    const R_SLOPE1: u128 = 20;   // 20% - 第一阶段最高利率
-    const R_SLOPE2: u128 = 500;  // 500% - 第二阶段最高利率
+    const R_BASE: u128 = 0;      // 0.00% - 基础利率
+    const R_SLOPE1: u128 = 2000;    // 20.00% - 第一阶段斜率
+    const R_SLOPE2: u128 = 50000;  // 500.00% - 第二阶段最高利率
 
     // === 结构体 ===
     public struct LendingPool<phantom CoinType> has key {
@@ -190,8 +190,8 @@ module lending::lending_core {
             total_supplies: 0,
             reserves: balance::zero<TESTSUI>(),
             total_borrows: 0,
-            borrow_index: 0,
-            supply_index: 0,
+            borrow_index: DECIMAL as u64,
+            supply_index: DECIMAL as u64,
             borrow_rate: 0,
             supply_rate: 0,
             last_update_time: clock::timestamp_ms(clock),
@@ -228,8 +228,8 @@ module lending::lending_core {
             total_supplies: 0,
             reserves: balance::zero<CoinType>(),
             total_borrows: 0,
-            borrow_index: 0,
-            supply_index: 0,
+            borrow_index: DECIMAL as u64,
+            supply_index: DECIMAL as u64,
             borrow_rate: 0,
             supply_rate: 0,
             last_update_time: clock::timestamp_ms(clock),
@@ -264,8 +264,8 @@ module lending::lending_core {
             total_supplies: 0,
             reserves: balance::zero<CoinType>(),
             total_borrows: 0,
-            borrow_index: 0,
-            supply_index: 0,
+            borrow_index: DECIMAL as u64,
+            supply_index: DECIMAL as u64,
             borrow_rate: 0,
             supply_rate: 0,
             last_update_time: clock::timestamp_ms(clock),
@@ -346,7 +346,7 @@ module lending::lending_core {
             );
             *index_snapshot = pool.supply_index;
         };
-
+        update_interest_rate(pool, clock);
         event::emit(
             SupplyEvent {
                 user,
@@ -427,7 +427,7 @@ module lending::lending_core {
 
         // 转账给用户
         transfer::public_transfer(withdraw_coin, user);
-
+        update_interest_rate(pool, clock);
         // 发出提现事件
         event::emit(
             WithdrawEvent {
@@ -528,7 +528,7 @@ module lending::lending_core {
 
         // 转账给用户
         transfer::public_transfer(borrow_coin, user);
-
+        update_interest_rate(pool, clock);
         // 发出借款事件
         event::emit(
             BorrowEvent {
@@ -611,7 +611,7 @@ module lending::lending_core {
         // 将还款代币存入储备金
         let repay_balance = coin::into_balance(split_coin);
         balance::join(&mut pool.reserves, repay_balance);
-
+        update_interest_rate(pool, clock);
         // 发出还款事件
         event::emit(
             RepayEvent {
@@ -701,7 +701,7 @@ module lending::lending_core {
 
         // 更新存款总额
         pool.total_supplies = pool.total_supplies + amount;
-
+        update_interest_rate(pool, clock);
         // 发出存款事件
         event::emit(
             SupplyEvent {
@@ -782,7 +782,7 @@ module lending::lending_core {
 
         // 转账给用户
         transfer::public_transfer(withdraw_coin, user);
-
+        update_interest_rate(pool, clock);
         // 发出提现事件
         event::emit(
             WithdrawEvent {
@@ -884,7 +884,7 @@ module lending::lending_core {
 
         // 转账给用户
         transfer::public_transfer(borrow_coin, user);
-
+        update_interest_rate(pool, clock);
         // 发出借款事件
         event::emit(
             BorrowEvent {
@@ -967,7 +967,7 @@ module lending::lending_core {
         // 将还款代币存入资金池
         let repay_balance = coin::into_balance(split_coin);
         balance::join(&mut pool.reserves, repay_balance);
-
+        update_interest_rate(pool, clock);
         // 发出还款事件
         event::emit(
             RepayEvent {
@@ -1220,59 +1220,38 @@ module lending::lending_core {
             return R_BASE
         };
 
-        // 将利用率转换为百分比 (0-100)
-        let utilization_rate_percent = utilization_rate * 100 / DECIMAL;
+        // 将利用率转换为百分比 (0-10000)
+        let utilization_rate_percent = utilization_rate * 10000 / DECIMAL;
 
         if (utilization_rate_percent <= U_OPTIMAL) {
             // 第一阶段：线性增长
-            // rate = (r_slope1 * u) / u_optimal
-            return (R_SLOPE1 * utilization_rate_percent) / U_OPTIMAL
+            // rate = base_rate + (r_slope1 * u) / u_optimal
+            R_BASE + (R_SLOPE1 * utilization_rate_percent) / U_OPTIMAL
         } else {
-            // 第二阶段：指数增长
-            // 计算超出最优利用率的部分
-            let excess_utilization = fixed_point64::create_from_rational(
-                utilization_rate_percent - U_OPTIMAL,
-                100 - U_OPTIMAL
-            );
+            // 第二阶段：超额利用率部分使用更陡的斜率
+            let base_rate = R_BASE + R_SLOPE1; // 在最优利用率点的利率
+            let excess_utilization = utilization_rate_percent - U_OPTIMAL;
+            let max_excess = 10000 - U_OPTIMAL;
             
-            // 使用e^x计算指数部分
-            let exp_part = math_fixed64::exp(excess_utilization);
+            // 对超额部分使用更高的斜率
+            let excess_rate = (R_SLOPE2 * excess_utilization) / max_excess;
             
-            // 将结果转换为利率
-            // rate = r_slope1 + (r_slope2 - r_slope1) * exp_factor
-            let exp_factor = fixed_point64::get_raw_value(exp_part);
-            let rate = R_SLOPE1 + ((R_SLOPE2 - R_SLOPE1) * exp_factor) / (1u128 << 64);
-            
-            if (rate > R_SLOPE2) {
-                R_SLOPE2
-            } else {
-                rate
-            }
+            base_rate + excess_rate
         }
     }
 
     // 计算存款年化利率
     fun compute_supply_rate<CoinType>(pool: &LendingPool<CoinType>) : u128 {
-        let total_supplies = pool.total_supplies;
-        let total_borrows = pool.total_borrows;
-        
-        if (total_supplies == 0) {
-            return 0
-        };
-
-        // 计算利用率
-        let utilization_rate = ((total_borrows as u128) * DECIMAL) / (total_supplies as u128);
-        
         // 计算借款利率
         let borrow_rate = compute_borrow_rate(pool);
         
-        // 存款利率 = 借款利率 * 利用率 * (1 - 储备金率)
-        ((borrow_rate * utilization_rate * (100 - RESERVE_FACTOR)) / (100 * DECIMAL))
+        // 存款利率 = 借款利率 * (1 - 储备金率)
+        ((borrow_rate * (10000 - RESERVE_FACTOR * 100)) / 10000)
     }
 
     // 利息因子计算函数
     fun calc_borrow_rate(annual_rate_percentage: u128, time_delta: u64) : u128 {
-        (annual_rate_percentage * (time_delta as u128) * DECIMAL) / (100 * YEAR_MS)
+        (annual_rate_percentage * (time_delta as u128) * DECIMAL) / (10000 * YEAR_MS)
     }
 
     // 利率更新函数
@@ -1281,9 +1260,6 @@ module lending::lending_core {
         clock: &Clock
     ) {
         let current_time = clock::timestamp_ms(clock);
-        if (pool.last_update_time == current_time) {
-            return
-        };
 
         let time_delta = current_time - pool.last_update_time;
         

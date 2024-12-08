@@ -97,4 +97,33 @@ export class DatabaseService {
       }
     });
   }
+
+  // 创建借贷池记录
+  static async createLending(data: {
+    name: string;
+    symbol: string;
+    type: string;
+    icon: string;
+    metadataId: string;
+    lendingPoolId: string;
+  }) {
+    return prisma.lending.create({
+      data: {
+        ...data,
+        decimals: 9,
+      }
+    });
+  }
+
+  // 检查借贷池是否存在
+  static async getLending(tokenType: string) {
+    return prisma.lending.findUnique({
+      where: { type: tokenType }
+    });
+  }
+
+  // 获取所有借贷池
+  static async getAllLendings() {
+    return prisma.lending.findMany();
+  }
 } 

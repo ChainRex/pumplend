@@ -59,7 +59,7 @@ app.get('/api/tokens', async (req, res) => {
   }
 });
 
-// 更新代币状��
+// 更新代币状态
 app.post('/api/tokens/:type/status', async (req, res) => {
   try {
     
@@ -149,6 +149,61 @@ app.get('/api/tokens/:type/pool', async (req, res) => {
   } catch (error) {
     console.error('Failed to get pool info:', error);
     res.status(500).json({ error: 'Failed to get pool info' });
+  }
+});
+
+// 创建借贷池记录
+app.post('/api/lendings', async (req, res) => {
+  try {
+    const { name, symbol, type, icon, metadataId, lendingPoolId } = req.body;
+    
+    // 检查是否已存在
+    const existing = await DatabaseService.getLending(type);
+    if (existing) {
+      return res.status(400).json({ error: '该代币已创建借贷池' });
+    }
+
+    const lending = await DatabaseService.createLending({
+      name,
+      symbol,
+      type,
+      icon,
+      metadataId,
+      lendingPoolId
+    });
+    
+    res.json(lending);
+  } catch (error) {
+    console.error('创建借贷池记录失败:', error);
+    res.status(500).json({ error: '创建借贷池记录失败' });
+  }
+});
+
+// 获取借贷池信息
+app.get('/api/lendings/:type', async (req, res) => {
+  try {
+    const { type } = req.params;
+    const lending = await DatabaseService.getLending(type);
+    
+    if (!lending) {
+      return res.status(404).json({ error: '借贷池不存在' });
+    }
+    
+    res.json(lending);
+  } catch (error) {
+    console.error('获取借贷池信息失败:', error);
+    res.status(500).json({ error: '获取借贷池信息失败' });
+  }
+});
+
+// 获取所有借贷池列表
+app.get('/api/lendings', async (req, res) => {
+  try {
+    const lendings = await DatabaseService.getAllLendings();
+    res.json(lendings);
+  } catch (error) {
+    console.error('获取借贷池列表失败:', error);
+    res.status(500).json({ error: '获取借贷池列表失败' });
   }
 });
 

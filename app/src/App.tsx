@@ -8,6 +8,7 @@ import { Transaction } from "@mysten/sui/transactions";
 import { PlusCircledIcon } from "@radix-ui/react-icons";
 import { TESTSUI_TREASURECAP_ID,TESTSUI_PACKAGE_ID } from "./config";
 import { useToast } from './hooks/useToast';
+import { LendingTest } from "./LendingTest";
 
 function Navigation() {
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
@@ -61,6 +62,12 @@ function Navigation() {
         <Text size="5" weight="bold">PumpSui</Text>
         <Flex gap="4">
           <button 
+            className={`nav-button ${location.pathname === '/lending' ? 'active' : ''}`}
+            onClick={() => navigate("/lending")}
+          >
+            Lending Test
+          </button>
+          <button 
             className={`nav-button ${location.pathname === '/trade' ? 'active' : ''}`}
             onClick={() => navigate("/trade")}
           >
@@ -96,6 +103,7 @@ export default function App() {
           <Box p="4">
             <Navigation />
             <Routes>
+              <Route path="/lending" element={<LendingTest />} />
               <Route path="/trade" element={<Trade />} />
               <Route path="/createToken" element={<TokenMint />} />
               <Route path="/" element={<Navigate to="/trade" replace />} />
