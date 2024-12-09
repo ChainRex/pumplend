@@ -9,6 +9,8 @@ import { PlusCircledIcon } from "@radix-ui/react-icons";
 import { TESTSUI_TREASURECAP_ID,TESTSUI_PACKAGE_ID } from "./config";
 import { useToast } from './hooks/useToast';
 import { LendingTest } from "./LendingTest";
+import { Lending } from "./Lending";
+import { Borrow } from "./Borrow";
 
 function Navigation() {
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
@@ -65,6 +67,12 @@ function Navigation() {
             className={`nav-button ${location.pathname === '/lending' ? 'active' : ''}`}
             onClick={() => navigate("/lending")}
           >
+            Lending
+          </button>
+          <button 
+            className={`nav-button ${location.pathname === '/lendingtest' ? 'active' : ''}`}
+            onClick={() => navigate("/lendingtest")}
+          >
             Lending Test
           </button>
           <button 
@@ -103,9 +111,11 @@ export default function App() {
           <Box p="4">
             <Navigation />
             <Routes>
-              <Route path="/lending" element={<LendingTest />} />
+              <Route path="/lending" element={<Lending />} />
+              <Route path="/lendingtest" element={<LendingTest />} />
               <Route path="/trade" element={<Trade />} />
               <Route path="/createToken" element={<TokenMint />} />
+              <Route path="/borrow" element={<Borrow />} />
               <Route path="/" element={<Navigate to="/trade" replace />} />
             </Routes>
           </Box>

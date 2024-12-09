@@ -433,4 +433,160 @@
   background: var(--gray-a3) !important;
   transform: scale(1.05);
 }
+
+/* Lending 页面样式 */
+.overview-card {
+  background: var(--gray-a3);
+  border-radius: 12px;
+  padding: 24px;
+  flex: 1;
+}
+
+.health-factor {
+  background: linear-gradient(45deg, var(--gray-a3), var(--gray-a4));
+}
+
+.main-content {
+  flex: 2;
+}
+
+.interaction-panel {
+  flex: 1;
+  background: var(--gray-a3);
+  border-radius: 12px;
+  min-width: 320px;
+}
+
+.section-card {
+  background: var(--gray-a3);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.asset-table {
+  background: var(--gray-a2);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.table-header {
+  background: var(--gray-a4);
+  color: var(--gray-11);
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.table-row {
+  border-bottom: 1px solid var(--gray-a4);
+}
+
+.table-row:last-child {
+  border-bottom: none;
+}
+
+.asset-logo {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+}
+
+.amount-input-container {
+  background: var(--gray-a2);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.amount-input {
+  background: var(--gray-a4);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.amount-input input {
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 18px;
+  width: 100%;
+}
+
+.amount-input input:focus {
+  outline: none;
+}
+
+.submit-button {
+  width: 100%;
+  background: linear-gradient(90deg, #3898FF 0%, #7A70FF 100%);
+  margin-top: 24px;
+}
+
+.submit-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 添加一些动画效果 */
+.overview-card,
+.section-card,
+.interaction-panel {
+  transition: transform 0.2s ease;
+}
+
+.overview-card:hover,
+.section-card:hover {
+  transform: translateY(-2px);
+}
+
+/* 自定义 Tabs 样式 */
+.rt-TabsList {
+  background: var(--gray-a2) !important;
+  border-radius: 8px !important;
+}
+
+.rt-TabsTrigger {
+  color: var(--gray-11) !important;
+}
+
+.rt-TabsTrigger[data-state="active"] {
+  background: var(--gray-a4) !important;
+  color: white !important;
+}
+
+/* 添加新的按钮样式 */
+.action-button {
+  background: linear-gradient(90deg, #3898FF 0%, #7A70FF 100%) !important;
+  color: white !important;
+  border: none !important;
+  transition: opacity 0.2s !important;
+}
+
+.action-button:hover {
+  opacity: 0.9 !important;
+}
+
+.action-button.secondary {
+  background: var(--gray-a4) !important;
+}
+
+.action-button.secondary:hover {
+  background: var(--gray-a5) !important;
+}
+
+/* 调整 Lending 页面容器宽度 */
+.lending-container {
+  max-width: 1600px !important;
+  padding: 0 8px !important;
+  margin: 0 auto !important;
+  width: 100% !important;
+}
+
+/* 调整主内容区和交互面板的比例 */
+.main-content {
+  flex: 5 !important;
+}
+
+.interaction-panel {
+  flex: 1 !important;
+  min-width: 360px !important;
+}
  
