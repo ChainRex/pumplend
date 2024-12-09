@@ -397,8 +397,12 @@ export function Trade() {
 
         // 确定代币顺序
         const testSuiType = `${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`;
+        console.log('testSuiType', testSuiType);
+        console.log('selectedToken.type', selectedToken.type);
         const comparison = compareCoinTypes(selectedToken.type, testSuiType);
         const isTokenCoinA = comparison > 0;
+        console.log('isTokenCoinA', isTokenCoinA);
+        
 
         // 预计算交换结果
         const preswapResult = await preswap({
@@ -427,9 +431,9 @@ export function Trade() {
 
 
         // 添加价格更新操作
-        if (comparison) {
+        if (isTokenCoinA) {
           swapPayload.moveCall({
-            target: `${LENDING_CORE_PACKAGE_ID}::lending_core::update_asset_price_b`,
+            target: `${LENDING_CORE_PACKAGE_ID}::lending_core::update_asset_price_a`,
             typeArguments: [selectedToken.type],
             arguments: [
               swapPayload.object(LENDING_STORAGE_ID),
@@ -438,7 +442,7 @@ export function Trade() {
           });
         } else {
           swapPayload.moveCall({
-            target: `${LENDING_CORE_PACKAGE_ID}::lending_core::update_asset_price_a`,
+            target: `${LENDING_CORE_PACKAGE_ID}::lending_core::update_asset_price_b`,
             typeArguments: [selectedToken.type],
             arguments: [
               swapPayload.object(LENDING_STORAGE_ID),
