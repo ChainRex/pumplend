@@ -204,6 +204,56 @@ const formatAmount = (amount: string, decimals: number = 9): string => {
     : integerPart;
 };
 
+// 添加事件类型定义
+interface SuiEvent {
+  id: {
+    txDigest: string;
+    eventSeq: string;
+  };
+  packageId: string;
+  transactionModule: string;
+  sender: string;
+  type: string;
+  parsedJson?: any;
+  timestampMs?: string;
+  bcs?: string;
+}
+
+// 修改事件查询函数的返回类型
+const queryEventsWithRetry = async (
+  suiClient: any,
+  packageId: string,
+  maxRetries: number = 3,
+  delayMs: number = 1000
+): Promise<{ data: SuiEvent[] }> => {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const events = await suiClient.queryEvents({
+        query: { 
+          MoveModule: {
+            package: packageId,
+            module: 'pumpsui_core'
+          },
+        }
+      });
+      
+      if (events.data && events.data.length > 0) {
+        return events;
+      }
+      
+      // 如果没有事件数据，等待后重试
+      await new Promise(resolve => setTimeout(resolve, delayMs * (i + 1)));
+    } catch (error) {
+      console.warn(`Attempt ${i + 1} failed to fetch events:`, error);
+      if (i === maxRetries - 1) throw error;
+      // 等待后重试
+      await new Promise(resolve => setTimeout(resolve, delayMs * (i + 1)));
+    }
+  }
+  
+  throw new Error('Failed to fetch events after multiple retries');
+};
+
 export function Trade() {
   const [fromAmount, setFromAmount] = useState("");
   const [toAmount, setToAmount] = useState("");
@@ -539,19 +589,20 @@ export function Trade() {
                 digest: result.digest,
               });
 
-              // 获取事件
-              const events = await suiClient.queryEvents({
-                query: { 
-                  MoveModule: {
-                    package: PUMPSUI_CORE_PACKAGE_ID,
-                    module: 'pumpsui_core'
-                  },
-                }
-              });
+              // 使用重试机制查询事件
+              let events: any[];
+              try {
+                const eventsResult = await queryEventsWithRetry(suiClient, PUMPSUI_CORE_PACKAGE_ID);
+                events = eventsResult.data;
+              } catch (error) {
+                console.error('Failed to fetch events after retries:', error);
+                // 即使获取事件失败，也继续执行其他逻辑
+                events = [];
+              }
               
               // 查找 TokenStatusEvent
-              const statusEvent = events.data.find(
-                event => event.type.includes('::TokenStatusEvent<')
+              const statusEvent = events.find(
+                (event: SuiEvent) => event.type.includes('::TokenStatusEvent<')
               ) as TokenStatusEvent | undefined;
 
               if (statusEvent && statusEvent.parsedJson) {
@@ -599,18 +650,18 @@ export function Trade() {
                   });
 
                   // 查找 CreatePoolEvent
-                  const createPoolEvent = events.data.find(
-                    event => event.type.includes('::factory::CreatePoolEvent')
+                  const createPoolEvent = events.find(
+                    (event: SuiEvent) => event.type.includes('::factory::CreatePoolEvent')
                   );
 
                   // 查找 OpenPositionEvent
-                  const openPositionEvent = events.data.find(
-                    event => event.type.includes('::pool::OpenPositionEvent')
+                  const openPositionEvent = events.find(
+                    (event: SuiEvent) => event.type.includes('::pool::OpenPositionEvent')
                   );
 
                   // 查找 AddLiquidityEvent
-                  const addLiquidityEvent = events.data.find(
-                    event => event.type.includes('::pool::AddLiquidityEvent')
+                  const addLiquidityEvent = events.find(
+                    (event: SuiEvent) => event.type.includes('::pool::AddLiquidityEvent')
                   );
                   console.log('events', events);
                   console.log('createPoolEvent', createPoolEvent);
@@ -652,7 +703,7 @@ export function Trade() {
                 }
               }
 
-              // 刷新余额
+              // 即使没有找到事件，也要刷新余额
               await Promise.all([
                 queryClient.invalidateQueries({
                   queryKey: ["tokenBalance", currentAccount.address, `${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`],
@@ -1046,7 +1097,7 @@ export function Trade() {
       // 检查是否会触发创建流动性池
       const events = dryRunResult.events || [];
       const statusEvent = events.find(
-        event => event.type.includes('::TokenStatusEvent<')
+        (event) => event.type.includes('::TokenStatusEvent<')
       ) as TokenStatusEvent | undefined;
 
       // 检查事件中的状态是否会变为 LIQUIDITY_POOL_PENDING
