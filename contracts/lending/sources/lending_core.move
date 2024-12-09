@@ -21,6 +21,7 @@ module lending::lending_core {
     const EInsufficientBalance: u64 = 1001;
     const EInsufficientPoolBalance: u64 = 1002;
     const EExceedBorrowLimit: u64 = 1003;
+    const EHealthFactorTooLow: u64 = 1004;
 
     // === 常量 ===
     // LTV
@@ -421,6 +422,13 @@ module lending::lending_core {
             EInsufficientBalance
         );
 
+        // 检查健康因子是否满足要求 (大于1)
+        let health_factor = calculate_health_factor(storage, user);
+        assert!(
+            health_factor > 100,
+            EHealthFactorTooLow
+        );
+
         // 从储备金中提取代币
         let withdraw_balance = balance::split(&mut pool.reserves, amount);
         let withdraw_coin = coin::from_balance(withdraw_balance, ctx);
@@ -516,7 +524,7 @@ module lending::lending_core {
         let health_factor = calculate_health_factor(storage, user);
         assert!(
             health_factor > 100,
-            EInsufficientBalance
+            EHealthFactorTooLow
         );
 
         // 更新借款总额
@@ -776,6 +784,13 @@ module lending::lending_core {
             EInsufficientBalance
         );
 
+        // 检查健康因子是否满足要求 (大于1)
+        let health_factor = calculate_health_factor(storage, user);
+        assert!(
+            health_factor > 100,
+            EHealthFactorTooLow
+        );
+
         // 从储备金中提取代币
         let withdraw_balance = balance::split(&mut pool.reserves, amount);
         let withdraw_coin = coin::from_balance(withdraw_balance, ctx);
@@ -872,7 +887,7 @@ module lending::lending_core {
         let health_factor = calculate_health_factor(storage, user);
         assert!(
             health_factor > 100,
-            EInsufficientBalance
+            EHealthFactorTooLow
         );
 
         // 更新借款总额
