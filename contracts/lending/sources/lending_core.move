@@ -35,7 +35,7 @@ module lending::lending_core {
     // 储备金率
     const RESERVE_FACTOR: u128 = 10; // 10%
 
-    // 清算奖励
+    // 清算激励
     const LIQUIDATION_BONUS: u64 = 10; // 10%
 
     const DECIMAL: u128 = 1_000_000_000;
@@ -76,7 +76,7 @@ module lending::lending_core {
         user: address,
         // 存款金额 (asset_type => amount)
         supplies: Table<TypeName, u64>,
-        // 借款金额 (asset_type => amount)
+        // ��款金额 (asset_type => amount)
         borrows: Table<TypeName, u64>,
         // 存储用户借款时的borrowIndex快照信息
         borrow_index_snapshots: Table<TypeName, u64>,
@@ -151,6 +151,14 @@ module lending::lending_core {
         borrows: vector<u64>,
         borrow_index_snapshots: vector<u64>,
         supply_index_snapshots: vector<u64>,
+        borrow_value: u128,
+        supply_value: u128
+    }
+
+    public struct AddAssetEvent has copy, drop {
+        type_name: TypeName,
+        ltv: u64,
+        liquidation_threshold: u64
     }
 
     // === init ===
@@ -197,6 +205,14 @@ module lending::lending_core {
             supply_rate: 0,
             last_update_time: clock::timestamp_ms(clock),
         };
+        // 发出添加资产事件
+        event::emit(
+            AddAssetEvent {
+                type_name: coin_type,
+                ltv: SUI_LTV,
+                liquidation_threshold: SUI_LIQUIDATION_THRESHOLD
+            }
+        );
         transfer::share_object(pool);
     }
 
@@ -235,6 +251,14 @@ module lending::lending_core {
             supply_rate: 0,
             last_update_time: clock::timestamp_ms(clock),
         };
+        // 发出添加资产事件
+        event::emit(
+            AddAssetEvent {
+                type_name: coin_type,
+                ltv: TOKEN_LTV,
+                liquidation_threshold: TOKEN_LIQUIDATION_THRESHOLD
+            }
+        );
         transfer::share_object(pool);
     }
 
@@ -271,6 +295,14 @@ module lending::lending_core {
             supply_rate: 0,
             last_update_time: clock::timestamp_ms(clock),
         };
+        // 发出添加资产事件
+        event::emit(
+            AddAssetEvent {
+                type_name: coin_type,
+                ltv: TOKEN_LTV,
+                liquidation_threshold: TOKEN_LIQUIDATION_THRESHOLD
+            }
+        );
         transfer::share_object(pool);
     }
 
@@ -983,7 +1015,7 @@ module lending::lending_core {
         let repay_balance = coin::into_balance(split_coin);
         balance::join(&mut pool.reserves, repay_balance);
         update_interest_rate(pool, clock);
-        // 发出还款事件
+        // ��出还款事件
         event::emit(
             RepayEvent {
                 user,
@@ -1009,74 +1041,130 @@ module lending::lending_core {
     // }
 
     // === 查询函数 ===
-    public fun get_reserves_count(storage: &LendingStorage): u8 {
-        abort ENotImplement
-    }
 
-    public fun get_user_assets(
-        storage: &LendingStorage,
-        user: address
-    ): (vector<u8>, vector<u8>) {
-        abort ENotImplement
-    }
-
-    public fun get_user_balance<CoinType>(
-        storage: &LendingStorage,
-        user: address
-    ): (u256, u256) {
-        abort ENotImplement
-    }
 
 
     public entry fun get_user_position(
         storage: &LendingStorage,
         user: address
     ) {
+        // 检查用户是否有仓位
+        if (!table::contains(&storage.user_positions, user)) {
+            // 用户没有仓位时，返回空数据
+            let mut empty_assets: vector<TypeName> = vector::empty();
+            let mut empty_supplies: vector<u64> = vector::empty();
+            let mut empty_borrows: vector<u64> = vector::empty();
+            let mut empty_snapshots: vector<u64> = vector::empty();
+
+            // 遍历所有支持的资产，添加空数据
+            let mut i = 0;
+            let assets_len = vector::length(&storage.supported_assets);
+            while (i < assets_len) {
+                let asset_info = vector::borrow(&storage.supported_assets, i);
+                vector::push_back(&mut empty_assets, asset_info.type_name);
+                vector::push_back(&mut empty_supplies, 0);
+                vector::push_back(&mut empty_borrows, 0);
+                vector::push_back(&mut empty_snapshots, 0);
+                i = i + 1;
+            };
+
+            event::emit(
+                GetUserPositionEvent {
+                    user,
+                    assets: empty_assets,
+                    supplies: empty_supplies,
+                    borrows: empty_borrows,
+                    borrow_index_snapshots: empty_snapshots,
+                    supply_index_snapshots: empty_snapshots,
+                    borrow_value: 0,
+                    supply_value: 0,
+                }
+            );
+            return
+        };
+
+        // 原有的处理逻辑
         let user_position = table::borrow(&storage.user_positions, user);
         let mut assets: vector<TypeName> = vector::empty();
         let mut supplies: vector<u64> = vector::empty();
         let mut borrows: vector<u64> = vector::empty();
         let mut borrow_index_snapshots: vector<u64> = vector::empty();
         let mut supply_index_snapshots: vector<u64> = vector::empty();
+        let mut total_borrow_value: u128 = 0;
+        let mut total_supply_value: u128 = 0;
 
         let mut i = 0;
         let assets_len = vector::length(&storage.supported_assets);
         while (i < assets_len) {
             let asset_info = vector::borrow(&storage.supported_assets, i);
-            if (table::contains(
+            vector::push_back(&mut assets, asset_info.type_name);
+            
+            // 获取资产价格
+            let price = *table::borrow(&storage.price, asset_info.type_name);
+
+            // 存款金额
+            if (table::contains(&user_position.supplies, asset_info.type_name)) {
+                let supply_amount = *table::borrow(
                     &user_position.supplies,
                     asset_info.type_name
-                )) {
-                vector::push_back(&mut assets, asset_info.type_name);
-                vector::push_back(&mut supplies, *table::borrow(
-                    &user_position.supplies,
+                );
+                vector::push_back(&mut supplies, supply_amount);
+                // 计算存款价值（转换为 SUI）
+                total_supply_value = total_supply_value + (
+                    (supply_amount as u128) * price
+                ) / DECIMAL;
+            } else {
+                vector::push_back(&mut supplies, 0);
+            };
+
+            // 借款金额
+            if (table::contains(&user_position.borrows, asset_info.type_name)) {
+                let borrow_amount = *table::borrow(
+                    &user_position.borrows,
+                    asset_info.type_name
+                );
+                vector::push_back(&mut borrows, borrow_amount);
+                // 计算借款价值（转换为 SUI）
+                total_borrow_value = total_borrow_value + (
+                    (borrow_amount as u128) * price
+                ) / DECIMAL;
+            } else {
+                vector::push_back(&mut borrows, 0);
+            };
+
+            // 借款利率快照
+            if (table::contains(&user_position.borrow_index_snapshots, asset_info.type_name)) {
+                vector::push_back(&mut borrow_index_snapshots, *table::borrow(
+                    &user_position.borrow_index_snapshots,
                     asset_info.type_name
                 ));
+            } else {
+                vector::push_back(&mut borrow_index_snapshots, 0);
+            };
+
+            // 存款利率快照
+            if (table::contains(&user_position.supply_index_snapshots, asset_info.type_name)) {
                 vector::push_back(&mut supply_index_snapshots, *table::borrow(
                     &user_position.supply_index_snapshots,
                     asset_info.type_name
                 ));
+            } else {
+                vector::push_back(&mut supply_index_snapshots, 0);
             };
-            if (table::contains(
-                    &user_position.borrows,
-                    asset_info.type_name
-                )) {
-                vector::push_back(&mut assets, asset_info.type_name);
-                vector::push_back(&mut borrows, *table::borrow(
-                    &user_position.borrows,
-                    asset_info.type_name
-                ));
-            };
+
             i = i + 1;
         };
+
         event::emit(
             GetUserPositionEvent {
                 user,
                 assets,
-                supplies,
+                supplies, 
                 borrows,
                 borrow_index_snapshots,
                 supply_index_snapshots,
+                borrow_value: total_borrow_value,
+                supply_value: total_supply_value,
             }
         );
     }
@@ -1235,7 +1323,7 @@ module lending::lending_core {
             return R_BASE
         };
 
-        // 将利用率转换为百分比 (0-10000)
+        // ��利用率转换为百分比 (0-10000)
         let utilization_rate_percent = utilization_rate * 10000 / DECIMAL;
 
         if (utilization_rate_percent <= U_OPTIMAL) {

@@ -10,6 +10,8 @@ export interface Lending {
   decimals: number;
   metadataId: string;
   lendingPoolId: string;
+  ltv: number;
+  liquidation_threshold: number;
 }
 
 export function useLendingList() {

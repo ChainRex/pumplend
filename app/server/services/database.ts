@@ -106,6 +106,8 @@ export class DatabaseService {
     icon: string;
     metadataId: string;
     lendingPoolId: string;
+    ltv: number;
+    liquidation_threshold: number;
   }) {
     return prisma.lending.create({
       data: {

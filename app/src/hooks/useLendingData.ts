@@ -32,6 +32,7 @@ export interface LendingPoolData {
   borrowRate: string;
   supplyRate: string;
   lastUpdateTime: string;
+  ltv: number;
 }
 
 export function useLendingData(lendings?: Lending[]) {
@@ -47,7 +48,6 @@ export function useLendingData(lendings?: Lending[]) {
             showContent: true,
           },
         });
-        console.log('poolData', poolData);
 
         if (poolData.data?.content?.dataType !== "moveObject") {
           throw new Error("无效的借贷池数据");
@@ -62,6 +62,7 @@ export function useLendingData(lendings?: Lending[]) {
           icon: lending.icon,
           type: lending.type,
           lendingPoolId: lending.lendingPoolId,
+          ltv: lending.ltv,
           reserves: formatUnits(fields.reserves || "0", lending.decimals),
           totalSupplies: formatUnits(fields.total_supplies || "0", lending.decimals),
           totalBorrows: formatUnits(fields.total_borrows || "0", lending.decimals),

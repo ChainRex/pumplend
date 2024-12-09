@@ -32,14 +32,16 @@ model Token {
 
 // 借贷池信息
 model Lending {
-    id            String   @id @default(uuid())
-    name          String
-    symbol        String
-    type          String   @unique
-    icon          String
-    decimals      Int      @default(9)
-    metadataId    String // 代币的 metadata ID
-    lendingPoolId String // Lending Pool 对象 ID
-    createdAt     DateTime @default(now())
-    updatedAt     DateTime @updatedAt
+    id                    String   @id @default(uuid())
+    name                  String
+    symbol                String
+    type                  String   @unique
+    icon                  String
+    decimals              Int      @default(9)
+    metadataId            String // 代币的 metadata ID
+    lendingPoolId         String // Lending Pool 对象 ID
+    ltv                   Int      @default(0) // 新增字段
+    liquidation_threshold Int      @default(0) // 新增字段
+    createdAt             DateTime @default(now())
+    updatedAt             DateTime @updatedAt
 }

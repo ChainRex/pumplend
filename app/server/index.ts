@@ -155,7 +155,7 @@ app.get('/api/tokens/:type/pool', async (req, res) => {
 // 创建借贷池记录
 app.post('/api/lendings', async (req, res) => {
   try {
-    const { name, symbol, type, icon, metadataId, lendingPoolId } = req.body;
+    const { name, symbol, type, icon, metadataId, lendingPoolId, ltv, liquidation_threshold } = req.body;
     
     // 检查是否已存在
     const existing = await DatabaseService.getLending(type);
@@ -169,7 +169,9 @@ app.post('/api/lendings', async (req, res) => {
       type,
       icon,
       metadataId,
-      lendingPoolId
+      lendingPoolId,
+      ltv,
+      liquidation_threshold
     });
     
     res.json(lending);
