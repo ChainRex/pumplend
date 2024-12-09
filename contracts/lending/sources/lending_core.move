@@ -1199,7 +1199,7 @@ module lending::lending_core {
                 // 将抵押物价值转换为 SUI (使用 LTV)
                 let value_in_ltv = (
                     (supply_amount as u128) * price * (asset_info.ltv as u128)
-                ) / (100 * DECIMAL);
+                ) / 100;
                 total_collateral_in_ltv = total_collateral_in_ltv + value_in_ltv;
             };
             i = i + 1;
