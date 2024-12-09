@@ -4,7 +4,8 @@ import { useState, useRef, useEffect } from "react";
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
 import { PUMPSUI_CORE_PACKAGE_ID, TESTSUI_ICON_URL, TESTSUI_PACKAGE_ID ,
-  CETUS_GLOBAL_CONFIG_ID, CETUS_POOLS_ID, CLOCK_ID, TESTSUI_METADATA_ID, API_BASE_URL} from "./config";
+  CETUS_GLOBAL_CONFIG_ID, CETUS_POOLS_ID, CLOCK_ID, TESTSUI_METADATA_ID, API_BASE_URL,
+  LENDING_CORE_PACKAGE_ID, LENDING_STORAGE_ID} from "./config";
 import { useTokenList, Token } from "./hooks/useTokenList";
 import ClipLoader from "react-spinners/ClipLoader";
 import { useTokenBalance } from "./hooks/useTokenBalance";
@@ -13,6 +14,7 @@ import { Toast } from './components/Toast';
 import { useToast } from './hooks/useToast';
 import { useCetusSwap } from './hooks/useCetusSwap';
 import { Confetti } from './components/Confetti';
+
 
 // 添加错误码常量
 const ERROR_CODES = {
@@ -369,7 +371,33 @@ export function Trade() {
           a2b: isTokenCoinA ? isTestSuiOnRight : !isTestSuiOnRight
         });
 
-        // 执行交换
+        // 获取借贷池信息
+        const lendingResponse = await fetch(`${API_BASE_URL}/lendings/${selectedToken.type}`);
+        const lendingData = await lendingResponse.json();
+
+
+        // 添加价格更新操作
+        if (comparison) {
+          swapPayload.moveCall({
+            target: `${LENDING_CORE_PACKAGE_ID}::lending_core::update_asset_price_b`,
+            typeArguments: [selectedToken.type],
+            arguments: [
+              swapPayload.object(LENDING_STORAGE_ID),
+              swapPayload.object(poolInfo.poolId),
+            ],
+          });
+        } else {
+          swapPayload.moveCall({
+            target: `${LENDING_CORE_PACKAGE_ID}::lending_core::update_asset_price_a`,
+            typeArguments: [selectedToken.type],
+            arguments: [
+              swapPayload.object(LENDING_STORAGE_ID),
+              swapPayload.object(poolInfo.poolId),
+            ],
+          });
+        }
+
+        // 执行交换和价格更新
         await signAndExecute(
           {
             transaction: swapPayload,
@@ -390,6 +418,10 @@ export function Trade() {
                 }),
                 queryClient.invalidateQueries({
                   queryKey: ["tokenBalance", currentAccount.address, selectedToken.type],
+                }),
+                // 刷新借贷池数据
+                queryClient.invalidateQueries({
+                  queryKey: ["lending", lendingData.lendingPoolId],
                 }),
               ]);
 

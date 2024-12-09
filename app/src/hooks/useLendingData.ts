@@ -2,6 +2,7 @@ import { useQueries } from "@tanstack/react-query";
 import { useSuiClient } from "@mysten/dapp-kit";
 import { Lending } from "./useLendingList";
 import { formatUnits } from '../utils/format';
+import { API_BASE_URL } from '../config';
 
 interface LendingPoolFields {
   reserves: string;
@@ -24,6 +25,7 @@ export interface LendingPoolData {
   icon: string;
   type: string;
   lendingPoolId: string;
+  cetusPoolId?: string;
   reserves: string;
   totalSupplies: string;
   totalBorrows: string;
@@ -55,6 +57,9 @@ export function useLendingData(lendings?: Lending[]) {
 
         const fields = poolData.data.content.fields as unknown as LendingPoolFields;
         
+        const tokenResponse = await fetch(`${API_BASE_URL}/tokens/${lending.type}/pool`);
+        const tokenData = await tokenResponse.json();
+        
         return {
           id: lending.id,
           name: lending.name,
@@ -62,6 +67,7 @@ export function useLendingData(lendings?: Lending[]) {
           icon: lending.icon,
           type: lending.type,
           lendingPoolId: lending.lendingPoolId,
+          cetusPoolId: tokenData?.poolId,
           ltv: lending.ltv,
           reserves: formatUnits(fields.reserves || "0", lending.decimals),
           totalSupplies: formatUnits(fields.total_supplies || "0", lending.decimals),

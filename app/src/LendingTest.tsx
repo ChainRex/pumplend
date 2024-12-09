@@ -378,6 +378,10 @@ export function LendingTest() {
           ],
         });
       } else {
+        if (!pool.cetusPoolId) {
+          throw new Error("未找到 CETUS 池子信息");
+        }
+
         // 准备代币支付
         const paymentCoin = await preparePaymentCoin(
           pool.type,
@@ -385,13 +389,18 @@ export function LendingTest() {
           tx
         );
 
+        // 判断代币顺序
+        const testSuiType = `${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`;
+        const comparison = pool.type.toLowerCase() > testSuiType.toLowerCase();
+
         tx.moveCall({
-          target: `${LENDING_CORE_PACKAGE_ID}::lending_core::supply_token`,
+          target: `${LENDING_CORE_PACKAGE_ID}::lending_core::supply_token_${comparison ? 'a' : 'b'}`,
           typeArguments: [pool.type],
           arguments: [
             tx.object(CLOCK_ID),
             tx.object(LENDING_STORAGE_ID),
             tx.object(pool.lendingPoolId),
+            tx.object(pool.cetusPoolId),
             paymentCoin,
             tx.pure.u64(amountValue),
           ],
@@ -469,13 +478,28 @@ export function LendingTest() {
           ],
         });
       } else {
+        // 获取 CETUS 池子信息
+        const poolInfo = await suiClient.getObject({
+          id: pool.cetusPoolId!,
+          options: { showContent: true }
+        });
+
+        if (!poolInfo.data?.objectId) {
+          throw new Error("无法获取 CETUS 池子信息");
+        }
+
+        // 判断代币顺序
+        const testSuiType = `${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`;
+        const comparison = pool.type.toLowerCase() > testSuiType.toLowerCase();
+
         tx.moveCall({
-          target: `${LENDING_CORE_PACKAGE_ID}::lending_core::withdraw_token`,
+          target: `${LENDING_CORE_PACKAGE_ID}::lending_core::withdraw_token_${comparison ? 'a' : 'b'}`,
           typeArguments: [pool.type],
           arguments: [
             tx.object(CLOCK_ID),
             tx.object(LENDING_STORAGE_ID),
             tx.object(pool.lendingPoolId),
+            tx.object(poolInfo.data.objectId),
             tx.pure.u64(amountValue),
           ],
         });
@@ -513,7 +537,7 @@ export function LendingTest() {
             }
           },
           onError: (error: Error) => {
-            console.error('取款交易错误:', error);
+            console.error('取款交���错误:', error);
           },
         }
       );
@@ -523,7 +547,7 @@ export function LendingTest() {
     }
   };
 
-  // 添加借款和还款函数
+  // 修改 handleBorrow 函数
   const handleBorrow = async (pool: LendingPoolData, amount: string) => {
     if (!currentAccount) {
       console.log('请先连接钱包');
@@ -552,13 +576,28 @@ export function LendingTest() {
           ],
         });
       } else {
+        // 获取 CETUS 池子信息
+        const poolInfo = await suiClient.getObject({
+          id: pool.cetusPoolId!,
+          options: { showContent: true }
+        });
+
+        if (!poolInfo.data?.objectId) {
+          throw new Error("无法获取 CETUS 池子信息");
+        }
+
+        // 判断代币顺序
+        const testSuiType = `${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`;
+        const comparison = pool.type.toLowerCase() > testSuiType.toLowerCase();
+
         tx.moveCall({
-          target: `${LENDING_CORE_PACKAGE_ID}::lending_core::borrow_token`,
+          target: `${LENDING_CORE_PACKAGE_ID}::lending_core::borrow_token_${comparison ? 'a' : 'b'}`,
           typeArguments: [pool.type],
           arguments: [
             tx.object(CLOCK_ID),
             tx.object(LENDING_STORAGE_ID),
             tx.object(pool.lendingPoolId),
+            tx.object(poolInfo.data.objectId),
             tx.pure.u64(amountValue),
           ],
         });
@@ -602,6 +641,7 @@ export function LendingTest() {
     }
   };
 
+  // 修改 handleRepay 函数
   const handleRepay = async (pool: LendingPoolData, amount: string) => {
     if (!currentAccount) {
       console.log('请先连接钱包');
@@ -638,6 +678,16 @@ export function LendingTest() {
           ],
         });
       } else {
+        // ��取 CETUS 池子信息
+        const poolInfo = await suiClient.getObject({
+          id: pool.cetusPoolId!,
+          options: { showContent: true }
+        });
+
+        if (!poolInfo.data?.objectId) {
+          throw new Error("无法获取 CETUS 池子信息");
+        }
+
         // 准备代币支付
         const paymentCoin = await preparePaymentCoin(
           pool.type,
@@ -645,13 +695,18 @@ export function LendingTest() {
           tx
         );
 
+        // 判断代币顺序
+        const testSuiType = `${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`;
+        const comparison = pool.type.toLowerCase() > testSuiType.toLowerCase();
+
         tx.moveCall({
-          target: `${LENDING_CORE_PACKAGE_ID}::lending_core::repay_token`,
+          target: `${LENDING_CORE_PACKAGE_ID}::lending_core::repay_token_${comparison ? 'a' : 'b'}`,
           typeArguments: [pool.type],
           arguments: [
             tx.object(CLOCK_ID),
             tx.object(LENDING_STORAGE_ID),
             tx.object(pool.lendingPoolId),
+            tx.object(poolInfo.data.objectId),
             paymentCoin,
             tx.pure.u64(amountValue),
           ],
