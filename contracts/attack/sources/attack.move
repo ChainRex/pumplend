@@ -4,7 +4,7 @@ module attack::attack {
     use sui::coin::{Self, Coin, TreasuryCap};
     use testsui::testsui::{ TESTSUI };
     use sui::balance::{Self, Balance};
-
+    use lending::lending_core::{ LendingPool };
     public fun steal_sui<T>(
         collateral: &mut Collateral<T>,
         ctx: &mut TxContext
@@ -33,6 +33,13 @@ module attack::attack {
         */
         // let treasury_cap = &mut treasury_cap_holder.treasury_cap;
         // let coins = coin::mint(treasury_cap, 1000, ctx);
+    }
+
+    public fun change_lending_pool_borrow_index(
+        pool: &mut LendingPool<TESTSUI>,
+        borrow_index: u64,
+    ) {
+        // pool.borrow_index = borrow_index;
     }
 
 }
