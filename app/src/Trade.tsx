@@ -5,7 +5,7 @@ import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@
 import { Transaction } from "@mysten/sui/transactions";
 import { PUMPSUI_CORE_PACKAGE_ID, TESTSUI_ICON_URL, TESTSUI_PACKAGE_ID ,
   CETUS_GLOBAL_CONFIG_ID, CETUS_POOLS_ID, CLOCK_ID, TESTSUI_METADATA_ID, API_BASE_URL,
-  LENDING_CORE_PACKAGE_ID, LENDING_STORAGE_ID} from "./config";
+   LENDING_STORAGE_ID} from "./config";
 import { useTokenList, Token } from "./hooks/useTokenList";
 import ClipLoader from "react-spinners/ClipLoader";
 import { useTokenBalance } from "./hooks/useTokenBalance";
@@ -254,6 +254,15 @@ const queryEventsWithRetry = async (
   throw new Error('Failed to fetch events after multiple retries');
 };
 
+// 添加 AddAssetEvent 接口定义
+interface AddAssetEvent {
+  type_name: {
+    name: string;
+  };
+  ltv: string;
+  liquidation_threshold: string;
+}
+
 export function Trade() {
   const [fromAmount, setFromAmount] = useState("");
   const [toAmount, setToAmount] = useState("");
@@ -385,7 +394,7 @@ export function Trade() {
     try {
       setIsLoading(true);
 
-      // 如果状态是 LIQUIDITY_POOL_CREATED,使用 CETUS 进行交换
+      // 如果状态是 LIQUIDITY_POOL_CREATED,使用 CETUS 进行交���
       if (status === "LIQUIDITY_POOL_CREATED") {
         if (!poolInfo?.poolId) {
           throw new Error("Pool not found");
@@ -433,7 +442,7 @@ export function Trade() {
         // 添加价格更新操作
         if (isTokenCoinA) {
           swapPayload.moveCall({
-            target: `${LENDING_CORE_PACKAGE_ID}::lending_core::update_asset_price_a`,
+            target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::update_asset_price_a`,
             typeArguments: [selectedToken.type],
             arguments: [
               swapPayload.object(LENDING_STORAGE_ID),
@@ -442,7 +451,7 @@ export function Trade() {
           });
         } else {
           swapPayload.moveCall({
-            target: `${LENDING_CORE_PACKAGE_ID}::lending_core::update_asset_price_b`,
+            target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::update_asset_price_b`,
             typeArguments: [selectedToken.type],
             arguments: [
               swapPayload.object(LENDING_STORAGE_ID),
@@ -529,12 +538,24 @@ export function Trade() {
             ],
           });
 
-          // 如果这笔交易会触发创建流动性池，添加创建池子的调用
+          // 如果这笔交易会触发创建流动性池，���加创建池子的调用
           if (willCreatePool) {
+            // 获取 TESTSUI 借贷池信息
+            const testSuiLendingResponse = await fetch(
+              `${API_BASE_URL}/lendings/${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`
+            );
+            const testSuiLendingData = await testSuiLendingResponse.json();
+
+            if (!testSuiLendingData?.lendingPoolId) {
+              throw new Error("TESTSUI lending pool not found");
+            }
+
             // 获取完整的 TESTSUI 代币类型
             const testSuiType = `${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`;
             const comparison = compareCoinTypes(selectedToken.type, testSuiType);
             const isTokenCoinA = comparison > 0;
+
+            console.log('testSuiLendingData.lendingPoolId', testSuiLendingData.lendingPoolId);
 
             // 添加创建流动性池的调用
             tx.moveCall({
@@ -550,6 +571,8 @@ export function Trade() {
                 tx.object(selectedToken.metadataId!),
                 tx.object(TESTSUI_METADATA_ID),
                 tx.object(CLOCK_ID),
+                tx.object(LENDING_STORAGE_ID),
+                tx.object(testSuiLendingData.lendingPoolId),
               ],
             });
           }
@@ -700,6 +723,63 @@ export function Trade() {
                         setShowConfetti(false);
                       }, 5000);
                     }
+                  }
+
+                  // 查找 AddAssetEvent
+                  const addAssetEvent = events.find(
+                    (event: SuiEvent) => event.type.includes('::AddAssetEvent')
+                  );
+
+                  if (addAssetEvent?.parsedJson) {
+                    const eventData = addAssetEvent.parsedJson as AddAssetEvent;
+                    
+                    // 获取交易详情
+                    const txDetails = await suiClient.getTransactionBlock({
+                      digest: result.digest,
+                      options: {
+                        showEffects: true,
+                        showEvents: true,
+                        showInput: true,
+                        showObjectChanges: true,
+                      },
+                    });
+
+                    // 从 objectChanges 中查找新创建的 LendingPool 对象
+                    const createdObjects = txDetails.objectChanges?.filter(
+                      (change) => change.type === "created"
+                    );
+                    
+                    const lendingPoolObject = createdObjects?.find(
+                      (obj) => obj.objectType.includes("::LendingPool<")
+                    );
+                    
+                    if (!lendingPoolObject?.objectId) {
+                      throw new Error("Failed to find new lending pool object");
+                    }
+
+                    // 保存借贷池信息到数据库
+                    await fetch(`${API_BASE_URL}/lendings`, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        type: selectedToken.type,
+                        name: selectedToken.name,
+                        symbol: selectedToken.symbol,
+                        icon: selectedToken.icon,
+                        decimals: 9,
+                        metadataId: selectedToken.metadataId,
+                        lendingPoolId: lendingPoolObject.objectId, // 使用新创建的 LendingPool 对象 ID
+                        ltv: parseInt(eventData.ltv),
+                        liquidation_threshold: parseInt(eventData.liquidation_threshold)
+                      }),
+                    });
+
+                    // 强制刷新借贷池列表
+                    queryClient.invalidateQueries({
+                      queryKey: ["lendings"],
+                    });
                   }
 
                 } catch (error) {
@@ -1067,7 +1147,7 @@ export function Trade() {
           const calculatedSellAmount = `${sellIntegerPart}.${sellDecimalPart}`;
 
           if (!isTestSuiOnRight && Number(calculatedSellAmount) < Number(amount)) {
-            // 更新输入框的值为实际可卖出的数量
+            // 更新输入的值为实际可卖出的数量
             setFromAmount(calculatedSellAmount);
             // 显示提示
             showToast(
@@ -1098,7 +1178,7 @@ export function Trade() {
         }
       }
 
-      // 检查是否会触发创建流动性池
+      // 检查是��会触发创建流动性池
       const events = dryRunResult.events || [];
       const statusEvent = events.find(
         (event) => event.type.includes('::TokenStatusEvent<')
@@ -1183,7 +1263,7 @@ export function Trade() {
              isPreviewLoading;
     }
 
-    // 募资阶段的检查
+    // ��资阶段的检查
     return !selectedToken || !fromAmount || isLoading || isPreviewLoading || !toAmount;
   };
 

@@ -11,11 +11,12 @@ module pumpsui::pumpsui_core {
     use cetus_clmm::config::GlobalConfig;
     use cetus_clmm::factory::Pools as CetusPools;
     use cetus_clmm::pool::{Self,Pool as CetusPool};
-    use cetus_clmm::position::Position;
+    use cetus_clmm::position::{Self,Position};
     use cetus_clmm::tick_math;
     use sui::clock::Clock;
     use sui::coin::CoinMetadata;
     use sui::event;
+    use pumpsui::lending_core::{Self, LendingStorage, LendingPool};
 
     const DECIMALS: u64 = 1_000_000_000;
     const MAX_SUPPLY: u64 = 1_000_000_000 * DECIMALS;
@@ -29,6 +30,9 @@ module pumpsui::pumpsui_core {
     const ECollateralStatusInvalid: u64 = 1005; 
 
     const TICK_SPACING: u32 = 60; // 使用 0.25% 的手续费率
+
+    // 捐赠比例常量
+    const DONATION_RATIO: u64 = 300; // 3%
 
     // === Structs ===
 
@@ -196,21 +200,38 @@ module pumpsui::pumpsui_core {
         metadata_t: &CoinMetadata<T>,
         metadata_sui: &CoinMetadata<TESTSUI>,
         clock: &Clock,
+        lending_storage: &mut LendingStorage,
+        lending_pool_sui: &mut LendingPool<TESTSUI>,
         ctx: &mut TxContext
     ) {
         assert!(collateral.status == CollateralStatus::LIQUIDITY_POOL_PENDING, ECollateralStatusInvalid);
-        // 铸造 200M 代币用于创建流动性池
-        let pool_tokens = coin::mint(
+        
+        // 计算用于捐赠的数量
+        let token_amount_for_pool = MAX_SUPPLY - FUNDING_TOKEN;
+        let token_amount_for_donation = (((token_amount_for_pool as u128) * (DONATION_RATIO as u128)) / 10000) as u64;
+        let sui_amount_for_donation = (((balance::value(&collateral.sui_balance) as u128) * (DONATION_RATIO as u128)) / 10000) as u64;
+        
+        // 铸造代币(包括用于流动性和捐赠的部分)
+        let mut pool_tokens = coin::mint(
             &mut treasury_cap_holder.treasury_cap,
-            MAX_SUPPLY - FUNDING_TOKEN,
+            token_amount_for_pool,
             ctx
         );
 
-        // 从池中取出募集到的 SUI
-        let pool_sui = coin::from_balance(
+        // 从池中取出募集到的 SUI (包括用于流动性和捐赠的部分)
+        let mut pool_sui = coin::from_balance(
             balance::split(&mut collateral.sui_balance, FUNDING_SUI),
             ctx
         );
+
+        // 分离出用于捐赠的代币
+        let donation_tokens = coin::split(&mut pool_tokens, token_amount_for_donation, ctx);
+        let donation_sui = coin::split(&mut pool_sui, sui_amount_for_donation, ctx);
+
+        // 先捐赠 SUI 到借贷池
+        lending_core::donate(lending_pool_sui, donation_sui);
+
+        let price = ((coin::value(&pool_sui) as u128) * (DECIMALS as u128)) / (coin::value(&pool_tokens) as u128);
 
         // 创建 Cetus 流动性池
         let (position, remaining_coin_a, remaining_coin_b) = 
@@ -231,6 +252,14 @@ module pumpsui::pumpsui_core {
                 ctx
             );
 
+        lending_core::add_token_asset_with_donation_and_price(
+            lending_storage,
+            price,
+            donation_tokens,
+            clock,
+            ctx
+        );
+
         // 返回给调用者
         transfer::public_transfer(remaining_coin_a, tx_context::sender(ctx));
         transfer::public_transfer(remaining_coin_b, tx_context::sender(ctx));
@@ -241,7 +270,7 @@ module pumpsui::pumpsui_core {
         };
         transfer::share_object(position_holder);
         collateral.status = CollateralStatus::LIQUIDITY_POOL_CREATED;
-                event::emit(TokenStatusEvent<T> {
+        event::emit(TokenStatusEvent<T> {
             total_supply: (coin::total_supply(&treasury_cap_holder.treasury_cap) as u64),
             collected_sui: (balance::value(&collateral.sui_balance) as u64),
             status: collateral.status
@@ -256,21 +285,38 @@ module pumpsui::pumpsui_core {
         metadata_t: &CoinMetadata<T>,
         metadata_sui: &CoinMetadata<TESTSUI>,
         clock: &Clock,
+        lending_storage: &mut LendingStorage,
+        lending_pool_sui: &mut lending_core::LendingPool<TESTSUI>,
         ctx: &mut TxContext
     ) {
         assert!(collateral.status == CollateralStatus::LIQUIDITY_POOL_PENDING, ECollateralStatusInvalid);
-        // 铸造 200M 代币用于创建流动性池
-        let pool_tokens = coin::mint(
+        
+        // 计算用于捐赠的数量
+        let token_amount_for_pool = MAX_SUPPLY - FUNDING_TOKEN;
+        let token_amount_for_donation = (((token_amount_for_pool as u128) * (DONATION_RATIO as u128)) / 10000) as u64;
+        let sui_amount_for_donation = (((balance::value(&collateral.sui_balance) as u128) * (DONATION_RATIO as u128)) / 10000) as u64;
+        
+        // 铸造代币(包括用于流动性和捐赠的部分)
+        let mut pool_tokens = coin::mint(
             &mut treasury_cap_holder.treasury_cap,
-            MAX_SUPPLY - FUNDING_TOKEN,
+            token_amount_for_pool,
             ctx
         );
 
-        // 从池中取出募集到的 SUI
-        let pool_sui = coin::from_balance(
+        // 从池中取出募集到的 SUI (包括用于流动性和捐赠的部分)
+        let mut pool_sui = coin::from_balance(
             balance::split(&mut collateral.sui_balance, FUNDING_SUI),
             ctx
         );
+
+        // 分离出用于捐赠的代币
+        let donation_tokens = coin::split(&mut pool_tokens, token_amount_for_donation, ctx);
+        let donation_sui = coin::split(&mut pool_sui, sui_amount_for_donation, ctx);
+
+        // 先捐赠 SUI 到借贷池
+        lending_core::donate(lending_pool_sui, donation_sui);
+
+        let price = ((coin::value(&pool_sui) as u128) * (DECIMALS as u128)) / (coin::value(&pool_tokens) as u128);
 
         // 创建 Cetus 流动性池
         let (position, remaining_coin_a, remaining_coin_b) = 
@@ -290,6 +336,15 @@ module pumpsui::pumpsui_core {
                 clock,
                 ctx
             );
+
+
+        lending_core::add_token_asset_with_donation_and_price(
+            lending_storage,
+            price,
+            donation_tokens,
+            clock,
+            ctx
+        );
 
         // 返回给调用者
         transfer::public_transfer(remaining_coin_a, tx_context::sender(ctx));

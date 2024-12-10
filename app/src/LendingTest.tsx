@@ -3,7 +3,7 @@ import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@
 import { Transaction } from "@mysten/sui/transactions";
 import { Token, useTokenList } from "./hooks/useTokenList";
 import { 
-  LENDING_CORE_PACKAGE_ID, 
+  PUMPSUI_CORE_PACKAGE_ID, 
   LENDING_STORAGE_ID, 
   CLOCK_ID, 
   TESTSUI_PACKAGE_ID,
@@ -66,224 +66,6 @@ export function LendingTest() {
   const testSuiToken = tokens?.find(token => 
     token.type === `${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`
   );
-
-  const handleAddTestSui = async () => {
-    if (!currentAccount) {
-      console.log('请先连接钱包');
-      return;
-    }
-
-    try {
-      const tx = new Transaction();
-      tx.moveCall({
-        target: `${LENDING_CORE_PACKAGE_ID}::lending_core::add_testsui_asset`,
-        arguments: [
-          tx.object(LENDING_STORAGE_ID),
-          tx.object(CLOCK_ID),
-        ],
-      });
-
-      await signAndExecute(
-        {
-          transaction: tx,
-        },
-        {
-          onSuccess: async (result) => {
-            try {
-              await suiClient.waitForTransaction({
-                digest: result.digest,
-              });
-
-              const txDetails = await suiClient.getTransactionBlock({
-                digest: result.digest,
-                options: {
-                  showEffects: true,
-                  showEvents: true,
-                  showInput: true,
-                  showObjectChanges: true,
-                },
-              });
-
-              const createdObjects = txDetails.objectChanges?.filter(
-                (change) => change.type === "created"
-              );
-              
-              const lendingPoolObject = createdObjects?.find(
-                (obj) => obj.objectType.includes("::LendingPool<")
-              );
-              
-              if (!lendingPoolObject) {
-                throw new Error('未找到 LendingPool 对象');
-              }
-
-              // 查找 AddAssetEvent
-              const addAssetEvent = txDetails.events?.find(
-                event => event.type.includes('::AddAssetEvent')
-              );
-
-              console.log("addAssetEvent:",addAssetEvent);
-              
-
-              if (!addAssetEvent?.parsedJson) {
-                throw new Error('未找到 AddAssetEvent');
-              }
-
-              const eventData = addAssetEvent.parsedJson as AddAssetEvent;
-
-              await fetch(`${API_BASE_URL}/lendings`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  type: `${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`,
-                  name: "testsui",
-                  symbol: "TESTSUI",
-                  icon: TESTSUI_ICON_URL,
-                  decimals: 9,
-                  metadataId: TESTSUI_METADATA_ID,
-                  lendingPoolId: lendingPoolObject.objectId,
-                  ltv: parseInt(eventData.ltv),
-                  liquidation_threshold: parseInt(eventData.liquidation_threshold)
-                }),
-              });
-
-              invalidateLendings();
-              console.log('成功添加 TESTSUI 到借贷池，交易哈希:', result.digest);
-            } catch (error) {
-              console.error('保存借贷池信息失败:', error);
-            }
-          },
-          onError: (error) => {
-            console.error('添加 TESTSUI 失败:', error);
-          },
-        }
-      );
-    } catch (error) {
-      console.error('添加 TESTSUI 失败:', error);
-    }
-  };
-
-  const handleAddTokenAsset = async (token: Token, poolId: string) => {
-    if (!currentAccount) {
-      console.log('请先连接钱包');
-      return;
-    }
-
-    try {
-      const tx = new Transaction();
-      
-      const testSuiType = `${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`;
-      const comparison = token.type.toLowerCase() > testSuiType.toLowerCase();
-
-      if (comparison) {
-        tx.moveCall({
-          target: `${LENDING_CORE_PACKAGE_ID}::lending_core::add_token_asset_a`,
-          typeArguments: [token.type],
-          arguments: [
-            tx.object(LENDING_STORAGE_ID),
-            tx.object(poolId),
-            tx.object(CLOCK_ID),
-          ],
-        });
-      } else {
-        tx.moveCall({
-          target: `${LENDING_CORE_PACKAGE_ID}::lending_core::add_token_asset_b`,
-          typeArguments: [token.type],
-          arguments: [
-            tx.object(LENDING_STORAGE_ID),
-            tx.object(poolId),
-            tx.object(CLOCK_ID),
-          ],
-        });
-      }
-
-      await signAndExecute(
-        {
-          transaction: tx,
-        },
-        {
-          onSuccess: async (result) => {
-            try {
-              await suiClient.waitForTransaction({
-                digest: result.digest,
-              });
-
-              const txDetails = await suiClient.getTransactionBlock({
-                digest: result.digest,
-                options: {
-                  showEffects: true,
-                  showEvents: true,
-                  showInput: true,
-                  showObjectChanges: true,
-                },
-              });
-
-              const createdObjects = txDetails.objectChanges?.filter(
-                (change) => change.type === "created"
-              );
-              
-              const lendingPoolObject = createdObjects?.find(
-                (obj) => obj.objectType.includes("::LendingPool<")
-              );
-
-              if (!lendingPoolObject) {
-                throw new Error('未找到 LendingPool 对象');
-              }
-
-              // 查找 AddAssetEvent
-              const addAssetEvent = txDetails.events?.find(
-                event => event.type.includes('::AddAssetEvent')
-              );
-
-              console.log("addAssetEvent:",addAssetEvent);
-
-              if (!addAssetEvent?.parsedJson) {
-                throw new Error('未找到 AddAssetEvent');
-              }
-
-              const eventData = addAssetEvent.parsedJson as AddAssetEvent;
-
-              console.log("eventData:",eventData);
-              
-
-              await fetch(`${API_BASE_URL}/lendings`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  type: token.type,
-                  name: token.name,
-                  symbol: token.symbol,
-                  icon: token.icon,
-                  decimals: token.decimals,
-                  metadataId: token.metadataId,
-                  lendingPoolId: lendingPoolObject.objectId,
-                  ltv: parseInt(eventData.ltv),
-                  liquidation_threshold: parseInt(eventData.liquidation_threshold)
-                }),
-              });
-
-              invalidateLendings();
-              console.log('成功添加资产到借贷池，交易哈希:', result.digest);
-            } catch (error) {
-              console.error('保存借贷池信息失败:', error);
-            }
-          },
-          onError: (error) => {
-            console.error('添加资产失败:', error);
-          },
-        }
-      );
-    } catch (error) {
-      console.error('添加资产失败:', error);
-    }
-  };
-
-  const isTokenInLendingPool = (tokenType: string) => {
-    return lendings?.some(lending => lending.type === tokenType);
-  };
 
   // 获取借贷池数据
   const lendingPoolsData = useLendingData(lendings);
@@ -368,7 +150,7 @@ export function LendingTest() {
         );
 
         tx.moveCall({
-          target: `${LENDING_CORE_PACKAGE_ID}::lending_core::supply_testsui`,
+          target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::supply_testsui`,
           arguments: [
             tx.object(CLOCK_ID),
             tx.object(LENDING_STORAGE_ID),
@@ -379,7 +161,7 @@ export function LendingTest() {
         });
       } else {
         if (!pool.cetusPoolId) {
-          throw new Error("未找到 CETUS 池子信息");
+          throw new Error("未找到 CETUS 池���信息");
         }
 
         // 准备代币支付
@@ -394,7 +176,7 @@ export function LendingTest() {
         const comparison = pool.type.toLowerCase() > testSuiType.toLowerCase();
 
         tx.moveCall({
-          target: `${LENDING_CORE_PACKAGE_ID}::lending_core::supply_token_${comparison ? 'a' : 'b'}`,
+          target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::supply_token_${comparison ? 'a' : 'b'}`,
           typeArguments: [pool.type],
           arguments: [
             tx.object(CLOCK_ID),
@@ -469,7 +251,7 @@ export function LendingTest() {
 
       if (pool.symbol === 'TESTSUI') {
         tx.moveCall({
-          target: `${LENDING_CORE_PACKAGE_ID}::lending_core::withdraw_testsui`,
+          target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::withdraw_testsui`,
           arguments: [
             tx.object(CLOCK_ID),
             tx.object(LENDING_STORAGE_ID),
@@ -493,7 +275,7 @@ export function LendingTest() {
         const comparison = pool.type.toLowerCase() > testSuiType.toLowerCase();
 
         tx.moveCall({
-          target: `${LENDING_CORE_PACKAGE_ID}::lending_core::withdraw_token_${comparison ? 'a' : 'b'}`,
+          target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::withdraw_token_${comparison ? 'a' : 'b'}`,
           typeArguments: [pool.type],
           arguments: [
             tx.object(CLOCK_ID),
@@ -537,7 +319,7 @@ export function LendingTest() {
             }
           },
           onError: (error: Error) => {
-            console.error('取款交���错误:', error);
+            console.error('取款交易错误:', error);
           },
         }
       );
@@ -567,7 +349,7 @@ export function LendingTest() {
 
       if (pool.symbol === 'TESTSUI') {
         tx.moveCall({
-          target: `${LENDING_CORE_PACKAGE_ID}::lending_core::borrow_testsui`,
+          target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::borrow_testsui`,
           arguments: [
             tx.object(CLOCK_ID),
             tx.object(LENDING_STORAGE_ID),
@@ -586,12 +368,12 @@ export function LendingTest() {
           throw new Error("无法获取 CETUS 池子信息");
         }
 
-        // 判断代币顺序
+        // 判���代币顺序
         const testSuiType = `${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`;
         const comparison = pool.type.toLowerCase() > testSuiType.toLowerCase();
 
         tx.moveCall({
-          target: `${LENDING_CORE_PACKAGE_ID}::lending_core::borrow_token_${comparison ? 'a' : 'b'}`,
+          target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::borrow_token_${comparison ? 'a' : 'b'}`,
           typeArguments: [pool.type],
           arguments: [
             tx.object(CLOCK_ID),
@@ -668,7 +450,7 @@ export function LendingTest() {
         );
 
         tx.moveCall({
-          target: `${LENDING_CORE_PACKAGE_ID}::lending_core::repay_testsui`,
+          target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::repay_testsui`,
           arguments: [
             tx.object(CLOCK_ID),
             tx.object(LENDING_STORAGE_ID),
@@ -678,7 +460,7 @@ export function LendingTest() {
           ],
         });
       } else {
-        // ��取 CETUS 池子信息
+        // 获取 CETUS 池子信息
         const poolInfo = await suiClient.getObject({
           id: pool.cetusPoolId!,
           options: { showContent: true }
@@ -700,7 +482,7 @@ export function LendingTest() {
         const comparison = pool.type.toLowerCase() > testSuiType.toLowerCase();
 
         tx.moveCall({
-          target: `${LENDING_CORE_PACKAGE_ID}::lending_core::repay_token_${comparison ? 'a' : 'b'}`,
+          target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::repay_token_${comparison ? 'a' : 'b'}`,
           typeArguments: [pool.type],
           arguments: [
             tx.object(CLOCK_ID),
@@ -866,7 +648,7 @@ export function LendingTest() {
       const tx = new Transaction();
       
       tx.moveCall({
-        target: `${LENDING_CORE_PACKAGE_ID}::lending_core::get_user_position`,
+        target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::get_user_position`,
         arguments: [
           tx.object(LENDING_STORAGE_ID),
           tx.pure.address(address)
@@ -899,7 +681,7 @@ export function LendingTest() {
       const tx = new Transaction();
       
       tx.moveCall({
-        target: `${LENDING_CORE_PACKAGE_ID}::lending_core::calculate_health_factor`,
+        target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::calculate_health_factor`,
         arguments: [
           tx.object(LENDING_STORAGE_ID),
           tx.pure.address(address)
@@ -1096,57 +878,9 @@ export function LendingTest() {
       </Box>
 
       <Flex direction="column" gap="6">
-        {/* 资产管理部分 */}
+        {/* 删除资产管理部分,直接从存取借还开始 */}
         <Box>
-          <Text size="4" weight="bold" mb="4">1. 资产管理</Text>
-          
-          {/* 1.1 添加 TESTSUI */}
-          <Box mb="4">
-            <Text size="3" weight="bold" mb="2">1.1 添加 TESTSUI 到借贷池</Text>
-            <Box mb="3">
-              <Text color="gray" as="p" mb="3">
-                • TESTSUI 是借贷池的基础资产，需要首先添加
-              </Text>
-            </Box>
-            <Button 
-              onClick={handleAddTestSui}
-              disabled={isTokenInLendingPool(`${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`)}
-            >
-              添加 TESTSUI 到借贷池
-            </Button>
-          </Box>
-
-          {/* 1.2 添加其他代币 */}
-          <Box mb="4">
-            <Text size="3" weight="bold" mb="2">1.2 添加其他代币到借贷池</Text>
-            <Box mb="3">
-              <Text color="gray" as="p" mb="1">
-                • 只有状态为 LIQUIDITY_POOL_CREATED 的代币才能被添加到借贷池
-              </Text>
-              <Text color="gray" as="p" mb="3">
-                • 添加资产时会自动判断代币类型顺序，选择正确的函数调用
-              </Text>
-            </Box>
-            <Flex direction="column" gap="2">
-              {availableTokens.map(token => (
-                <Flex key={token.type} justify="between" align="center">
-                  <Text>{token.symbol}</Text>
-                  <Button 
-                    onClick={() => handleAddTokenAsset(token, token.poolId!)}
-                    disabled={!token.poolId || isTokenInLendingPool(token.type)}
-                  >
-                    添加到借贷池
-                  </Button>
-                </Flex>
-              ))}
-              {availableTokens.length === 0 && (
-                <Text color="gray">暂无可添加的代币（需要先创建流动性池）</Text>
-              )}
-            </Flex>
-          </Box>
-        </Box>
-        <Box>
-          <Text size="4" weight="bold" mb="4">2. 存取借还</Text>
+          <Text size="4" weight="bold" mb="4">1. 存取借还</Text>
           <Table.Root variant="surface">
             <Table.Header>
               <Table.Row>
@@ -1189,7 +923,7 @@ export function LendingTest() {
 
         {/* 查询功能部分 */}
         <Box>
-          <Text size="4" weight="bold" mb="4">3. 用户仓位</Text>
+          <Text size="4" weight="bold" mb="4">2. 用户仓位</Text>
           <Flex direction="column" gap="4">
             {/* 添加健康因子显示 */}
             <HealthFactorDisplay />

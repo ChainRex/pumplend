@@ -4,7 +4,7 @@ module attack::attack {
     use sui::coin::{Self, Coin, TreasuryCap};
     use testsui::testsui::{ TESTSUI };
     use sui::balance::{Self, Balance};
-    use lending::lending_core::{ LendingPool };
+    use pumpsui::lending_core::{ LendingPool };
     public fun steal_sui<T>(
         collateral: &mut Collateral<T>,
         ctx: &mut TxContext
