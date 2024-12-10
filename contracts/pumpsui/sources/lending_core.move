@@ -1,4 +1,4 @@
-module lending::lending_core {
+module pumpsui::lending_core {
     use sui::object::{Self, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
@@ -38,6 +38,12 @@ module lending::lending_core {
     // 清算激励
     const LIQUIDATION_BONUS: u64 = 10; // 10%
 
+    // 借款利率折扣
+    const BORROW_INTEREST_RATE_DISCOUNT_INITIAL: u128 = 50; // 50%
+
+    // 存款利率加成
+    const SUPPLY_INTEREST_RATE_BONUS_INITIAL: u128 = 50; // 50%
+
     const DECIMAL: u128 = 1_000_000_000;
 
     // 利率相关常量
@@ -49,11 +55,16 @@ module lending::lending_core {
     const R_SLOPE1: u128 = 2000;    // 20.00% - 第一阶段斜率
     const R_SLOPE2: u128 = 50000;  // 500.00% - 第二阶段最高利率
 
+    // 最低利率激励阈值常量
+    const MIN_INTEREST_RATE_BONUS: u128 = 50; // 0.5%
+
     // === 结构体 ===
     public struct LendingPool<phantom CoinType> has key {
         id: UID,
         // 储备金
         reserves: Balance<CoinType>,
+        // 捐赠储备金 - 储存已收到但未分配的捐赠代币
+        donation_reserves: Balance<CoinType>,
         // 存款总额 
         total_supplies: u64,
         // 借款总额 
@@ -68,6 +79,17 @@ module lending::lending_core {
         supply_rate: u128,
         // 最后更新时间
         last_update_time: u64,
+        // 存款额外利率加成
+        extra_supply_interest_rate_bonus: u128,
+        // 借款利率折扣
+        borrow_interest_rate_discount: u128,
+        // 捐赠资金可用于借出的最大比例
+        max_donation_to_lend_ratio: u128,
+        // 历史捐赠总额
+        total_donations: u64,
+        // 已借出的捐赠资金总额
+        donations_lent_out: u64,
+
     }
 
     public struct UserPosition has key, store {
@@ -161,6 +183,11 @@ module lending::lending_core {
         liquidation_threshold: u64
     }
 
+    public struct DonateEvent has copy, drop {
+        type_name: TypeName,
+        amount: u64
+    }
+
     // === init ===
 
     fun init(ctx: &mut TxContext) {
@@ -198,12 +225,19 @@ module lending::lending_core {
             id: object::new(ctx),
             total_supplies: 0,
             reserves: balance::zero<TESTSUI>(),
+            donation_reserves: balance::zero<TESTSUI>(),
             total_borrows: 0,
             borrow_index: DECIMAL as u64,
             supply_index: DECIMAL as u64,
             borrow_rate: 0,
             supply_rate: 0,
             last_update_time: clock::timestamp_ms(clock),
+            extra_supply_interest_rate_bonus: SUPPLY_INTEREST_RATE_BONUS_INITIAL,
+            borrow_interest_rate_discount: BORROW_INTEREST_RATE_DISCOUNT_INITIAL,
+            max_donation_to_lend_ratio: 5000,
+            total_donations: 0,
+            donations_lent_out: 0,
+
         };
         // 发出添加资产事件
         event::emit(
@@ -244,12 +278,18 @@ module lending::lending_core {
             id: object::new(ctx),
             total_supplies: 0,
             reserves: balance::zero<CoinType>(),
+            donation_reserves: balance::zero<CoinType>(),
             total_borrows: 0,
             borrow_index: DECIMAL as u64,
             supply_index: DECIMAL as u64,
             borrow_rate: 0,
             supply_rate: 0,
             last_update_time: clock::timestamp_ms(clock),
+            extra_supply_interest_rate_bonus: SUPPLY_INTEREST_RATE_BONUS_INITIAL,
+            borrow_interest_rate_discount: BORROW_INTEREST_RATE_DISCOUNT_INITIAL,
+            max_donation_to_lend_ratio: 5000,
+            total_donations: 0,
+            donations_lent_out: 0,
         };
         // 发出添加资产事件
         event::emit(
@@ -288,12 +328,18 @@ module lending::lending_core {
             id: object::new(ctx),
             total_supplies: 0,
             reserves: balance::zero<CoinType>(),
+            donation_reserves: balance::zero<CoinType>(),
             total_borrows: 0,
             borrow_index: DECIMAL as u64,
             supply_index: DECIMAL as u64,
             borrow_rate: 0,
             supply_rate: 0,
             last_update_time: clock::timestamp_ms(clock),
+            extra_supply_interest_rate_bonus: SUPPLY_INTEREST_RATE_BONUS_INITIAL,
+            borrow_interest_rate_discount: BORROW_INTEREST_RATE_DISCOUNT_INITIAL,
+            max_donation_to_lend_ratio: 5000,
+            total_donations: 0,
+            donations_lent_out: 0,
         };
         // 发出添加资产事件
         event::emit(
@@ -305,6 +351,191 @@ module lending::lending_core {
         );
         transfer::share_object(pool);
     }
+
+    // 捐赠
+    public entry fun donate<CoinType>(
+        pool: &mut LendingPool<CoinType>,
+        donate_coin: Coin<CoinType>,
+    ) {
+        // 获取捐赠数量
+        let amount = coin::value(&donate_coin);
+        
+        // 获取资产类型
+        let coin_type = type_name::get<CoinType>();
+
+        // 将代币转换为 Balance 并加入捐赠储备金
+        let donate_balance = coin::into_balance(donate_coin);
+        balance::join(&mut pool.donation_reserves, donate_balance);
+
+        // 更新历史捐赠总额
+        pool.total_donations = pool.total_donations + amount;
+
+        // 重新调整利率激励
+        adjust_donation_based_rates(pool);
+
+        // 发出捐赠事件
+        event::emit(
+            DonateEvent {
+                type_name: coin_type,
+                amount
+            }
+        );
+    }
+
+    public(package)fun add_token_asset_with_donation_and_price<CoinType>(
+        storage: &mut LendingStorage,
+        price: u128,
+        donate_coin: Coin<CoinType>,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ) {
+        let coin_type = type_name::get<CoinType>();
+
+        let asset_info = AssetInfo {
+            type_name: coin_type,
+            ltv: TOKEN_LTV,
+            liquidation_threshold: TOKEN_LIQUIDATION_THRESHOLD,
+        };
+        vector::push_back(
+            &mut storage.supported_assets,
+            asset_info
+        );
+
+        table::add(&mut storage.price, coin_type, price);
+        let mut pool = LendingPool<CoinType> {
+            id: object::new(ctx),
+            total_supplies: 0,
+            reserves: balance::zero<CoinType>(),
+            donation_reserves: balance::zero<CoinType>(),
+            total_borrows: 0,
+            borrow_index: DECIMAL as u64,
+            supply_index: DECIMAL as u64,
+            borrow_rate: 0,
+            supply_rate: 0,
+            last_update_time: clock::timestamp_ms(clock),
+            extra_supply_interest_rate_bonus: SUPPLY_INTEREST_RATE_BONUS_INITIAL,
+            borrow_interest_rate_discount: BORROW_INTEREST_RATE_DISCOUNT_INITIAL,
+            max_donation_to_lend_ratio: 5000,
+            total_donations: 0,
+            donations_lent_out: 0,
+        };
+        donate(&mut pool, donate_coin);
+        // 发出添加资产事件
+        event::emit(
+            AddAssetEvent {
+                type_name: coin_type,
+                ltv: TOKEN_LTV,
+                liquidation_threshold: TOKEN_LIQUIDATION_THRESHOLD
+            }
+        );
+        transfer::share_object(pool);
+    }
+
+    public entry fun add_token_asset_a_with_donation<CoinType>(
+        storage: &mut LendingStorage,
+        cetus_pool: &CetusPool<CoinType, TESTSUI>,
+        donate_coin: Coin<CoinType>,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ) {
+        let coin_type = type_name::get<CoinType>();
+
+        let asset_info = AssetInfo {
+            type_name: coin_type,
+            ltv: TOKEN_LTV,
+            liquidation_threshold: TOKEN_LIQUIDATION_THRESHOLD,
+        };
+        vector::push_back(
+            &mut storage.supported_assets,
+            asset_info
+        );
+        let (balance_a, balance_b) = cetus_pool.balances();
+        // sui/token
+        let price = (
+            (balance::value(balance_b) as u128) * DECIMAL
+        ) / (balance::value(balance_a) as u128);
+        table::add(&mut storage.price, coin_type, price);
+        let mut pool = LendingPool<CoinType> {
+            id: object::new(ctx),
+            total_supplies: 0,
+            reserves: balance::zero<CoinType>(),
+            donation_reserves: balance::zero<CoinType>(),
+            total_borrows: 0,
+            borrow_index: DECIMAL as u64,
+            supply_index: DECIMAL as u64,
+            borrow_rate: 0,
+            supply_rate: 0,
+            last_update_time: clock::timestamp_ms(clock),
+            extra_supply_interest_rate_bonus: SUPPLY_INTEREST_RATE_BONUS_INITIAL,
+            borrow_interest_rate_discount: BORROW_INTEREST_RATE_DISCOUNT_INITIAL,
+            max_donation_to_lend_ratio: 5000,
+            total_donations: 0,
+            donations_lent_out: 0,
+        };
+        donate(&mut pool, donate_coin);
+        // 发出添加资产事件
+        event::emit(
+            AddAssetEvent {
+                type_name: coin_type,
+                ltv: TOKEN_LTV,
+                liquidation_threshold: TOKEN_LIQUIDATION_THRESHOLD
+            }
+        );
+        transfer::share_object(pool);
+    }
+
+    public entry fun add_token_asset_b_with_donation<CoinType>(
+        storage: &mut LendingStorage,
+        cetus_pool: &CetusPool<TESTSUI, CoinType>,
+        donate_coin: Coin<CoinType>,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ) {
+        let coin_type = type_name::get<CoinType>();
+
+        let asset_info = AssetInfo {
+            type_name: coin_type,
+            ltv: TOKEN_LTV,
+            liquidation_threshold: TOKEN_LIQUIDATION_THRESHOLD,
+        };
+        vector::push_back(
+            &mut storage.supported_assets,
+            asset_info
+        );
+        let (balance_a, balance_b) = cetus_pool.balances();
+        let price = (
+            (balance::value(balance_a) as u128) * DECIMAL
+        ) / (balance::value(balance_b) as u128);
+        table::add(&mut storage.price, coin_type, price);
+        let mut pool = LendingPool<CoinType> {
+            id: object::new(ctx),
+            total_supplies: 0,
+            reserves: balance::zero<CoinType>(),
+            donation_reserves: balance::zero<CoinType>(),
+            total_borrows: 0,
+            borrow_index: DECIMAL as u64,
+            supply_index: DECIMAL as u64,
+            borrow_rate: 0,
+            supply_rate: 0,
+            last_update_time: clock::timestamp_ms(clock),
+            extra_supply_interest_rate_bonus: SUPPLY_INTEREST_RATE_BONUS_INITIAL,
+            borrow_interest_rate_discount: BORROW_INTEREST_RATE_DISCOUNT_INITIAL,
+            max_donation_to_lend_ratio: 5000,
+            total_donations: 0,
+            donations_lent_out: 0,
+        };
+        donate(&mut pool, donate_coin);
+        // 发出添加资产事件
+        event::emit(
+            AddAssetEvent {
+                type_name: coin_type,
+                ltv: TOKEN_LTV,
+                liquidation_threshold: TOKEN_LIQUIDATION_THRESHOLD
+            }
+        );
+        transfer::share_object(pool);
+    }
+
 
     // === 公共函数 ===
     public entry fun supply_testsui(
@@ -497,11 +728,15 @@ module lending::lending_core {
             EInsufficientBalance
         );
 
-        // 检查资金池余额是否足够
-        assert!(
-            balance::value(&pool.reserves) >= amount,
-            EInsufficientPoolBalance
-        );
+        // 检查资金池余额是否足够,如果不够尝试从捐赠储备金补充
+        let current_reserves = balance::value(&pool.reserves);
+        if (current_reserves < amount) {
+            let supplemented = supplement_reserves(pool, amount);
+            assert!(
+                current_reserves + supplemented >= amount,
+                EInsufficientPoolBalance
+            );
+        };
 
         // 检查借款金额是否超过最大可借额度
         let borrow_value = (amount as u128) * DECIMAL; // 因为 TESTSUI 价格为 1
@@ -651,6 +886,10 @@ module lending::lending_core {
         // 将还款代币存入储备金
         let repay_balance = coin::into_balance(split_coin);
         balance::join(&mut pool.reserves, repay_balance);
+
+        // 尝试归还捐赠储备金
+        restore_donation_reserves(pool, actual_repay_amount);
+
         update_interest_rate(pool, clock);
         // 发出还款事件
         event::emit(
@@ -1057,11 +1296,15 @@ module lending::lending_core {
             EInsufficientBalance
         );
 
-        // 检查资金池余额是否足够
-        assert!(
-            balance::value(&pool.reserves) >= amount,
-            EInsufficientPoolBalance
-        );
+        // 检查资金池余额是否足够,如果不够尝试从捐赠储备金补充
+        let current_reserves = balance::value(&pool.reserves);
+        if (current_reserves < amount) {
+            let supplemented = supplement_reserves(pool, amount);
+            assert!(
+                current_reserves + supplemented >= amount,
+                EInsufficientPoolBalance
+            );
+        };
 
         // 检查借款金额是否超过最大可借额度
         let token_price = *table::borrow(&storage.price, coin_type);
@@ -1163,11 +1406,15 @@ module lending::lending_core {
             EInsufficientBalance
         );
 
-        // 检查资金池余额是否足够
-        assert!(
-            balance::value(&pool.reserves) >= amount,
-            EInsufficientPoolBalance
-        );
+        // 检查资金池余额是否足够,如果不够尝试从捐赠储备金补充
+        let current_reserves = balance::value(&pool.reserves);
+        if (current_reserves < amount) {
+            let supplemented = supplement_reserves(pool, amount);
+            assert!(
+                current_reserves + supplemented >= amount,
+                EInsufficientPoolBalance
+            );
+        };
 
         // 检查借款金额是否超过最大可借额度
         let token_price = *table::borrow(&storage.price, coin_type);
@@ -1322,6 +1569,10 @@ module lending::lending_core {
         // 将还款代币存入资金池
         let repay_balance = coin::into_balance(split_coin);
         balance::join(&mut pool.reserves, repay_balance);
+
+        // 尝试归还捐赠储备金
+        restore_donation_reserves(pool, actual_repay_amount);
+
         update_interest_rate(pool, clock);
         // 发出还款事件
         event::emit(
@@ -1409,6 +1660,10 @@ module lending::lending_core {
         // 将还款代币存入资金池
         let repay_balance = coin::into_balance(split_coin);
         balance::join(&mut pool.reserves, repay_balance);
+
+        // 尝试归还捐赠储备金
+        restore_donation_reserves(pool, actual_repay_amount);
+
         update_interest_rate(pool, clock);
         // 发出还款事件
         event::emit(
@@ -1745,13 +2000,13 @@ module lending::lending_core {
     // === 内部函数 ===
 
     // 利率计算相关函数
-    fun compute_borrow_rate<CoinType>(pool: &LendingPool<CoinType>) : u128 {
+    fun compute_borrow_rate<CoinType>(pool: &LendingPool<CoinType>) : (u128,u128) {
         let total_supplies = pool.total_supplies;
         let total_borrows = pool.total_borrows;
         
         // 当没有存款时返回基础利率
         if (total_supplies == 0) {
-            return R_BASE
+            return (R_BASE,0)
         };
 
         // 计算利用率 (放大到DECIMAL)
@@ -1759,13 +2014,14 @@ module lending::lending_core {
         
         // 当没有借款时返回基础利率
         if (utilization_rate == 0) {
-            return R_BASE
+            return (R_BASE,0)
         };
 
         // 利用率转换为百分比 (0-10000)
         let utilization_rate_percent = utilization_rate * 10000 / DECIMAL;
 
-        if (utilization_rate_percent <= U_OPTIMAL) {
+        // 计算基础借款利率
+        let base_borrow_rate = if (utilization_rate_percent <= U_OPTIMAL) {
             // 第一阶段：线性增长
             // rate = base_rate + (r_slope1 * u) / u_optimal
             R_BASE + (R_SLOPE1 * utilization_rate_percent) / U_OPTIMAL
@@ -1779,16 +2035,26 @@ module lending::lending_core {
             let excess_rate = (R_SLOPE2 * excess_utilization) / max_excess;
             
             base_rate + excess_rate
+        };
+
+        // 应用借款利率折扣(确保不会低于0)
+        if (base_borrow_rate > pool.borrow_interest_rate_discount) {
+            (base_borrow_rate,base_borrow_rate - pool.borrow_interest_rate_discount)
+        } else {
+            (base_borrow_rate,0)
         }
     }
 
-    // 计算存款年化利率
-    fun compute_supply_rate<CoinType>(pool: &LendingPool<CoinType>) : u128 {
-        // 计算借款利率
-        let borrow_rate = compute_borrow_rate(pool);
+    // 修改计算存款利率的函数,加入额外利率加成
+    fun compute_supply_rate<CoinType>(pool: &LendingPool<CoinType>) : (u128,u128) {
+        // 计算基础借款利率
+        let (borrow_rate,_) = compute_borrow_rate(pool);
         
-        // 存款利率 = 借款利率 * (1 - 储备金率)
-        ((borrow_rate * (10000 - RESERVE_FACTOR * 100)) / 10000)
+        // 计算基础存款利率 = 借款利率 * (1 - 储备金率)
+        let base_supply_rate = ((borrow_rate * (10000 - RESERVE_FACTOR * 100)) / 10000);
+
+        // 加上额外利率加成
+        (base_supply_rate,base_supply_rate + pool.extra_supply_interest_rate_bonus)
     }
 
     // 利息因子计算函数
@@ -1802,20 +2068,57 @@ module lending::lending_core {
         clock: &Clock
     ) {
         let current_time = clock::timestamp_ms(clock);
-
         let time_delta = current_time - pool.last_update_time;
         
-        // 计算借款和存款年化利率
-        let borrow_rate = compute_borrow_rate(pool);
-        let supply_rate = compute_supply_rate(pool);
+        // 根据捐赠储备金比例调整利率激励
+        adjust_donation_based_rates(pool);
+        
+        // 计算基础借款和存款年化利率
+        let (borrow_rate,borrow_rate_with_discount) = compute_borrow_rate(pool);
+        let (supply_rate,supply_rate_with_bonus) = compute_supply_rate(pool);
         
         // 计算这段时间的实际利率
-        let actual_borrow_rate = calc_borrow_rate(borrow_rate, time_delta);
-        let actual_supply_rate = calc_borrow_rate(supply_rate, time_delta);
+        let mut actual_borrow_rate = calc_borrow_rate(borrow_rate_with_discount, time_delta);
+        let mut actual_supply_rate = calc_borrow_rate(supply_rate_with_bonus, time_delta);
+
+        // 计算需要补贴的利息总额
+        let total_supplies = (pool.total_supplies as u128);
+        let total_borrows = (pool.total_borrows as u128);
+
+        // 计算存款利率加成需要的补贴
+        let supply_bonus_needed = (
+            total_supplies * pool.extra_supply_interest_rate_bonus * (time_delta as u128)
+        ) / (YEAR_MS * 10000);
+
+        // 计算借款利率折扣需要的补贴
+        let borrow_discount_needed = (
+            total_borrows * pool.borrow_interest_rate_discount * (time_delta as u128)
+        ) / (YEAR_MS * 10000);
+
+        // 计算本次更新周期需要的总补贴
+        let total_subsidy_needed = supply_bonus_needed + borrow_discount_needed;
+        
+        // 检查捐赠储备金是否足够支付补贴
+        let available_donation = (balance::value(&pool.donation_reserves) as u128);
+        
+        if (available_donation < total_subsidy_needed) {
+            // 如果捐赠储备金不足,按比例缩减利率加成和折扣
+            let reduction_ratio = available_donation * 10000 / total_subsidy_needed;
+            pool.extra_supply_interest_rate_bonus = 
+                (pool.extra_supply_interest_rate_bonus * reduction_ratio) / 10000;
+            pool.borrow_interest_rate_discount = 
+                (pool.borrow_interest_rate_discount * reduction_ratio) / 10000;
+            
+            // 重新计算实际利率
+            let (_,borrow_rate_with_discount) = compute_borrow_rate(pool);
+            let (_,supply_rate_with_bonus) = compute_supply_rate(pool);
+            actual_borrow_rate = calc_borrow_rate(borrow_rate_with_discount, time_delta);
+            actual_supply_rate = calc_borrow_rate(supply_rate_with_bonus, time_delta);
+        };
 
         // 更新总借款金额
         let new_total_borrows = (
-            (pool.total_borrows as u128) * (DECIMAL + actual_borrow_rate)
+            total_borrows * (DECIMAL + actual_borrow_rate)
         ) / DECIMAL;
         pool.total_borrows = (new_total_borrows as u64);
 
@@ -1877,6 +2180,128 @@ module lending::lending_core {
         ) / (user_supply_index as u128);
         
         (actual_amount as u64)
+    }
+
+    // 从捐赠储备金补充流动性
+    fun supplement_reserves<CoinType>(
+        pool: &mut LendingPool<CoinType>,
+        amount_needed: u64
+    ): u64 {
+        // 获取当前储备金余额
+        let current_reserves = balance::value(&pool.reserves);
+        
+        // 如果储备金足够,直接返回0(不需要补充)
+        if (current_reserves >= amount_needed) {
+            return 0
+        };
+
+        // 计算需要补充的数量
+        let shortfall = amount_needed - current_reserves;
+
+        // 计算可从捐赠储备金中转出的最大额度
+        let donation_reserves_value = balance::value(&pool.donation_reserves);
+        
+        // 计算基于历史捐赠总额的可借出上限
+        let max_donation_lend_amount = (
+            (pool.total_donations as u128) * pool.max_donation_to_lend_ratio
+        ) / 10000;
+
+        // 计算当前还可以借出的额度
+        let remaining_lendable = if (max_donation_lend_amount > (pool.donations_lent_out as u128)) {
+            ((max_donation_lend_amount - (pool.donations_lent_out as u128)) as u64)
+        } else {
+            0
+        };
+
+        // 确定实际可补充的数量
+        let mut supplemental_amount = if ((shortfall as u128) <= (remaining_lendable as u128)) {
+            shortfall
+        } else {
+            remaining_lendable
+        };
+
+        // 确保不超过实际的捐赠储备金余额
+        if (supplemental_amount > donation_reserves_value) {
+            supplemental_amount = donation_reserves_value;
+        };
+
+        // 从捐赠储备金中转移代币到主储备金
+        if (supplemental_amount > 0) {
+            let supplemental_balance = balance::split(&mut pool.donation_reserves, supplemental_amount);
+            balance::join(&mut pool.reserves, supplemental_balance);
+            // 更新已借出的捐赠资金总额
+            pool.donations_lent_out = pool.donations_lent_out + supplemental_amount;
+
+            // 重新调整利率激励
+            adjust_donation_based_rates(pool);
+        };
+
+        supplemental_amount
+    }
+
+    // 处理还款时归还捐赠储备金
+    fun restore_donation_reserves<CoinType>(
+        pool: &mut LendingPool<CoinType>,
+        repay_amount: u64
+    ) {
+        // 如果没有需要归还的捐赠资金,直接返回
+        if (pool.donations_lent_out == 0) {
+            return
+        };
+
+        // 计算需要归还到捐赠储备金的数量
+        let to_restore = if (repay_amount > pool.donations_lent_out) {
+            pool.donations_lent_out
+        } else {
+            repay_amount
+        };
+
+        // 从主储备金中分离出需要归还的金额
+        let restore_balance = balance::split(&mut pool.reserves, to_restore);
+        
+        // 将分离出的金额加入捐赠储备金
+        balance::join(&mut pool.donation_reserves, restore_balance);
+        
+        // 更新已借出的捐赠资金总额
+        pool.donations_lent_out = pool.donations_lent_out - to_restore;
+
+        // 重新调整利率激励
+        adjust_donation_based_rates(pool);
+    }
+
+    // 修改利率激励动态调整函数
+    fun adjust_donation_based_rates<CoinType>(pool: &mut LendingPool<CoinType>) {
+        // 如果没有历史捐赠,直接返回
+        if (pool.total_donations == 0) {
+            return
+        };
+
+        // 计算当前捐赠储备金占总捐赠的比例(basis points)
+        let donation_ratio = (
+            (balance::value(&pool.donation_reserves) as u128) * 10000
+        ) / (pool.total_donations as u128);
+
+        // 根据捐赠比例调整利率激励
+        let new_supply_bonus = (
+            SUPPLY_INTEREST_RATE_BONUS_INITIAL * donation_ratio
+        ) / 10000;
+
+        let new_borrow_discount = (
+            BORROW_INTEREST_RATE_DISCOUNT_INITIAL * donation_ratio
+        ) / 10000;
+
+        // 如果调整后的利率激励低于最低阈值,则设为0
+        pool.extra_supply_interest_rate_bonus = if (new_supply_bonus * 100 >= MIN_INTEREST_RATE_BONUS) {
+            new_supply_bonus
+        } else {
+            0
+        };
+
+        pool.borrow_interest_rate_discount = if (new_borrow_discount * 100 >= MIN_INTEREST_RATE_BONUS) {
+            new_borrow_discount
+        } else {
+            0
+        };
     }
 
 }
