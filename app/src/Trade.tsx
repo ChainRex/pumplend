@@ -394,7 +394,7 @@ export function Trade() {
     try {
       setIsLoading(true);
 
-      // 如果状态是 LIQUIDITY_POOL_CREATED,使用 CETUS 进行交���
+      // 如果状态是 LIQUIDITY_POOL_CREATED,使用 CETUS 进行交易
       if (status === "LIQUIDITY_POOL_CREATED") {
         if (!poolInfo?.poolId) {
           throw new Error("Pool not found");
@@ -447,6 +447,7 @@ export function Trade() {
             arguments: [
               swapPayload.object(LENDING_STORAGE_ID),
               swapPayload.object(poolInfo.poolId),
+              swapPayload.object(CLOCK_ID),
             ],
           });
         } else {
@@ -456,6 +457,7 @@ export function Trade() {
             arguments: [
               swapPayload.object(LENDING_STORAGE_ID),
               swapPayload.object(poolInfo.poolId),
+              swapPayload.object(CLOCK_ID),
             ],
           });
         }
@@ -1178,7 +1180,7 @@ export function Trade() {
         }
       }
 
-      // 检查是��会触发创建流动性池
+      // 检查是否会触发创建流动性池
       const events = dryRunResult.events || [];
       const statusEvent = events.find(
         (event) => event.type.includes('::TokenStatusEvent<')
@@ -1263,7 +1265,7 @@ export function Trade() {
              isPreviewLoading;
     }
 
-    // ��资阶段的检查
+    // 募资阶段的检查
     return !selectedToken || !fromAmount || isLoading || isPreviewLoading || !toAmount;
   };
 

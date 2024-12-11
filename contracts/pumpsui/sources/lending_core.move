@@ -16,12 +16,15 @@ module pumpsui::lending_core {
     use legato_math::fixed_point64::{Self, FixedPoint64};
     use legato_math::math_fixed64;
 
+// 当借出meme币的时候，降低最大可借出价值,并且计算最大可借出价值的时候，meme币的价值占比提升
+
     // === 错误码 ===
     const ENotImplement: u64 = 0;
     const EInsufficientBalance: u64 = 1001;
     const EInsufficientPoolBalance: u64 = 1002;
     const EExceedBorrowLimit: u64 = 1003;
     const EHealthFactorTooLow: u64 = 1004;
+    const ETokenPriceTooLow: u64 = 1005;
 
     // === 常量 ===
     // LTV
@@ -33,16 +36,16 @@ module pumpsui::lending_core {
     const TOKEN_LIQUIDATION_THRESHOLD: u64 = 70; // 70%
 
     // 储备金率
-    const RESERVE_FACTOR: u128 = 10; // 10%
+    const RESERVE_FACTOR: u128 = 30; // 30%
 
-    // 清算激励
-    const LIQUIDATION_BONUS: u64 = 10; // 10%
+    // 清算折扣
+    const LIQUIDATION_DISCOUNT: u64 = 20; // 20% 折扣
 
     // 借款利率折扣
-    const BORROW_INTEREST_RATE_DISCOUNT_INITIAL: u128 = 50; // 50%
+    const BORROW_INTEREST_RATE_DISCOUNT_INITIAL: u128 = 25; // 25%
 
     // 存款利率加成
-    const SUPPLY_INTEREST_RATE_BONUS_INITIAL: u128 = 50; // 50%
+    const SUPPLY_INTEREST_RATE_BONUS_INITIAL: u128 = 25; // 25%
 
     const DECIMAL: u128 = 1_000_000_000;
 
@@ -57,6 +60,9 @@ module pumpsui::lending_core {
 
     // 最低利率激励阈值常量
     const MIN_INTEREST_RATE_BONUS: u128 = 50; // 0.5%
+
+    // 最低可借出价格
+    const MIN_BORROW_PRICE: u128 = 12_500_000; // 0.0125 TESTSUI/token
 
     // === 结构体 ===
     public struct LendingPool<phantom CoinType> has key {
@@ -118,6 +124,10 @@ module pumpsui::lending_core {
         supported_assets: vector<AssetInfo>,
         // 价格 (asset_type => price) sui/token
         price: Table<TypeName, u128>,
+
+        // 价格更新时间 (asset_type => timestamp)
+        price_update_time: Table<TypeName, u64>,
+
         // 用户仓位 (user => UserPosition)
         user_positions: Table<address, UserPosition>,
     }
@@ -195,7 +205,8 @@ module pumpsui::lending_core {
             id: object::new(ctx),
             supported_assets: vector::empty(),
             user_positions: table::new(ctx),
-            price: table::new(ctx)
+            price: table::new(ctx),
+            price_update_time: table::new(ctx),
         };
         transfer::share_object(lending_storage);
     }
@@ -220,6 +231,11 @@ module pumpsui::lending_core {
             &mut storage.price,
             coin_type,
             DECIMAL
+        );
+        table::add(
+            &mut storage.price_update_time,
+            coin_type,
+            clock::timestamp_ms(clock)
         );
         let pool = LendingPool<TESTSUI> {
             id: object::new(ctx),
@@ -274,6 +290,11 @@ module pumpsui::lending_core {
             (balance::value(balance_b) as u128) * DECIMAL
         ) / (balance::value(balance_a) as u128);
         table::add(&mut storage.price, coin_type, price);
+        table::add(
+            &mut storage.price_update_time,
+            coin_type,
+            clock::timestamp_ms(clock)
+        );
         let pool = LendingPool<CoinType> {
             id: object::new(ctx),
             total_supplies: 0,
@@ -324,6 +345,11 @@ module pumpsui::lending_core {
             (balance::value(balance_a) as u128) * DECIMAL
         ) / (balance::value(balance_b) as u128);
         table::add(&mut storage.price, coin_type, price);
+        table::add(
+            &mut storage.price_update_time,
+            coin_type,
+            clock::timestamp_ms(clock)
+        );
         let pool = LendingPool<CoinType> {
             id: object::new(ctx),
             total_supplies: 0,
@@ -402,6 +428,11 @@ module pumpsui::lending_core {
         );
 
         table::add(&mut storage.price, coin_type, price);
+        table::add(
+            &mut storage.price_update_time,
+            coin_type,
+            clock::timestamp_ms(clock)
+        );
         let mut pool = LendingPool<CoinType> {
             id: object::new(ctx),
             total_supplies: 0,
@@ -455,6 +486,11 @@ module pumpsui::lending_core {
             (balance::value(balance_b) as u128) * DECIMAL
         ) / (balance::value(balance_a) as u128);
         table::add(&mut storage.price, coin_type, price);
+        table::add(
+            &mut storage.price_update_time,
+            coin_type,
+            clock::timestamp_ms(clock)
+        );
         let mut pool = LendingPool<CoinType> {
             id: object::new(ctx),
             total_supplies: 0,
@@ -507,6 +543,11 @@ module pumpsui::lending_core {
             (balance::value(balance_a) as u128) * DECIMAL
         ) / (balance::value(balance_b) as u128);
         table::add(&mut storage.price, coin_type, price);
+        table::add(
+            &mut storage.price_update_time,
+            coin_type,
+            clock::timestamp_ms(clock)
+        );
         let mut pool = LendingPool<CoinType> {
             id: object::new(ctx),
             total_supplies: 0,
@@ -914,7 +955,7 @@ module pumpsui::lending_core {
         update_interest_rate(pool, clock);
 
         // 更新资产价格
-        update_asset_price_a(storage, cetus_pool);
+        update_asset_price_a(storage, cetus_pool, clock);
 
         let coin_type = type_name::get<CoinType>();
 
@@ -1008,7 +1049,7 @@ module pumpsui::lending_core {
         update_interest_rate(pool, clock);
 
         // 更新资产价格
-        update_asset_price_b(storage, cetus_pool);
+        update_asset_price_b(storage, cetus_pool, clock);
 
         let coin_type = type_name::get<CoinType>();
 
@@ -1101,7 +1142,7 @@ module pumpsui::lending_core {
         update_interest_rate(pool, clock);
 
         // 更新资产价格
-        update_asset_price_a(storage, cetus_pool);
+        update_asset_price_a(storage, cetus_pool, clock);
 
         let coin_type = type_name::get<CoinType>();
         let user = tx_context::sender(ctx);
@@ -1193,7 +1234,7 @@ module pumpsui::lending_core {
         update_interest_rate(pool, clock);
 
         // 更新资产价格
-        update_asset_price_b(storage, cetus_pool);
+        update_asset_price_b(storage, cetus_pool, clock);
 
         let coin_type = type_name::get<CoinType>();
         let user = tx_context::sender(ctx);
@@ -1285,7 +1326,7 @@ module pumpsui::lending_core {
         update_interest_rate(pool, clock);
 
         // 更新资产价格
-        update_asset_price_a(storage, cetus_pool);
+        update_asset_price_a(storage, cetus_pool, clock);
 
         let coin_type = type_name::get<CoinType>();
         let user = tx_context::sender(ctx);
@@ -1295,6 +1336,15 @@ module pumpsui::lending_core {
             table::contains(&storage.user_positions, user),
             EInsufficientBalance
         );
+
+        let token_price = *table::borrow(&storage.price, coin_type);
+        
+        // 检查代币价格是否达到最低阈值
+        assert!(
+            token_price >= MIN_BORROW_PRICE,
+            ETokenPriceTooLow
+        );
+
 
         // 检查资金池余额是否足够,如果不够尝试从捐赠储备金补充
         let current_reserves = balance::value(&pool.reserves);
@@ -1306,8 +1356,8 @@ module pumpsui::lending_core {
             );
         };
 
-        // 检查借款金额是否超过最大可借额度
-        let token_price = *table::borrow(&storage.price, coin_type);
+
+
         let borrow_value = ((amount as u128) * token_price) / DECIMAL; // 转换为 SUI 价值
         let max_borrow_value = calculate_max_borrow_value(storage, user);
 
@@ -1395,7 +1445,7 @@ module pumpsui::lending_core {
         update_interest_rate(pool, clock);
 
         // 更新资产价格
-        update_asset_price_b(storage, cetus_pool);
+        update_asset_price_b(storage, cetus_pool, clock);
 
         let coin_type = type_name::get<CoinType>();
         let user = tx_context::sender(ctx);
@@ -1405,6 +1455,14 @@ module pumpsui::lending_core {
             table::contains(&storage.user_positions, user),
             EInsufficientBalance
         );
+        let token_price = *table::borrow(&storage.price, coin_type);
+        
+        // 检查代币价格是否达到最低阈值
+        assert!(
+            token_price >= MIN_BORROW_PRICE,
+            ETokenPriceTooLow
+        );
+
 
         // 检查资金池余额是否足够,如果不够尝试从捐赠储备金补充
         let current_reserves = balance::value(&pool.reserves);
@@ -1416,8 +1474,6 @@ module pumpsui::lending_core {
             );
         };
 
-        // 检查借款金额是否超过最大可借额度
-        let token_price = *table::borrow(&storage.price, coin_type);
         let borrow_value = ((amount as u128) * token_price) / DECIMAL; // 转换为 SUI 价值
         let max_borrow_value = calculate_max_borrow_value(storage, user);
 
@@ -1506,7 +1562,7 @@ module pumpsui::lending_core {
         update_interest_rate(pool, clock);
 
         // 更新资产价格
-        update_asset_price_a(storage, cetus_pool);
+        update_asset_price_a(storage, cetus_pool, clock);
 
         let coin_type = type_name::get<CoinType>();
         let user = tx_context::sender(ctx);
@@ -1597,7 +1653,7 @@ module pumpsui::lending_core {
         update_interest_rate(pool, clock);
 
         // 更新资产价格
-        update_asset_price_b(storage, cetus_pool);
+        update_asset_price_b(storage, cetus_pool, clock);
 
         let coin_type = type_name::get<CoinType>();
         let user = tx_context::sender(ctx);
@@ -1676,23 +1732,151 @@ module pumpsui::lending_core {
     }
 
     // 清算
-    // public entry fun liquidate<DebtCoinType, CollateralCoinType>(
-    //     clock: &Clock,
-    //     storage: &mut LendingStorage,
-    //     debt_pool: &mut LendingPool<DebtCoinType>,
-    //     debt_coin: Coin<DebtCoinType>,
-    //     collateral_pool: &mut LendingPool<CollateralCoinType>,
-    //     cetus_pool: &CetusPool<CollateralCoinType, DebtCoinType>,
-    //     liquidate_user: address,
-    //     liquidate_amount: u64,
-    //     ctx: &mut TxContext
-    // ) {
-    //     abort ENotImplement
-    // }
+    public entry fun liquidate<DebtCoinType, CollateralCoinType>(
+        clock: &Clock,
+        storage: &mut LendingStorage,
+        debt_pool: &mut LendingPool<DebtCoinType>,
+        debt_coin: &mut Coin<DebtCoinType>,
+        collateral_pool: &mut LendingPool<CollateralCoinType>,
+        liquidate_user: address,
+        liquidate_amount: u64,
+        ctx: &mut TxContext
+    ) {
+        // 更新利率
+        update_interest_rate(debt_pool, clock);
+        update_interest_rate(collateral_pool, clock);
+
+        let debt_type = type_name::get<DebtCoinType>();
+        let collateral_type = type_name::get<CollateralCoinType>();
+
+        // 获取清算人地址
+        let liquidator = tx_context::sender(ctx);
+
+        // 检查被清算用户的健康因子是否小于1
+        let health_factor = calculate_health_factor(storage, liquidate_user);
+        assert!(health_factor < 100, 0); // 健康因子必须小于1
+
+        // 如果不是TESTSUI,检查价格是否在15秒内更新过
+        if (debt_type != type_name::get<TESTSUI>()) {
+            let price_update_time = *table::borrow(&storage.price_update_time, debt_type);
+            assert!(
+                clock::timestamp_ms(clock) - price_update_time <= 15000,
+                0
+            );
+        };
+        if (collateral_type != type_name::get<TESTSUI>()) {
+            let price_update_time = *table::borrow(&storage.price_update_time, collateral_type);
+            assert!(
+                clock::timestamp_ms(clock) - price_update_time <= 15000,
+                0
+            );
+        };
+
+        // 获取被清算用户的仓位
+        let user_position = table::borrow_mut(&mut storage.user_positions, liquidate_user);
+
+        // 检查被清算用户是否有对应的债务和抵押品
+        assert!(
+            table::contains(&user_position.borrows, debt_type),
+            0
+        );
+        assert!(
+            table::contains(&user_position.supplies, collateral_type),
+            0
+        );
+
+        // 计算实际债务金额
+        let actual_debt = calculate_user_actual_borrow_amount(debt_pool, user_position, debt_type);
+        
+        // 限制清算金额不超过实际债务的50%
+        let actual_liquidate_amount = if (liquidate_amount > actual_debt / 2) {
+            actual_debt / 2
+        } else {
+            liquidate_amount
+        };
+
+        // 检查清算人提供的代币是否足够
+        assert!(
+            coin::value(debt_coin) >= actual_liquidate_amount,
+            0
+        );
+
+        // 计算要获得的抵押品数量(使用折扣价格)
+        let debt_price = *table::borrow(&storage.price, debt_type);
+        let collateral_price = *table::borrow(&storage.price, collateral_type);
+        
+        // 计算抵押品价值 = 债务价值 / (1 - 清算折扣)
+        // 例如: 如果债务价值是100 SUI,清算折扣是20%,那么清算人只需要支付80 SUI就能获得100 SUI价值的抵押品
+        let collateral_amount = (
+            ((actual_liquidate_amount as u128) * debt_price * 100) 
+            / (collateral_price * (100 - LIQUIDATION_DISCOUNT as u128))
+        ) as u64;
+
+        // 更新被清算用户的债务记录
+        let remaining_debt = actual_debt - actual_liquidate_amount;
+        if (remaining_debt == 0) {
+            table::remove(&mut user_position.borrows, debt_type);
+            table::remove(&mut user_position.borrow_index_snapshots, debt_type);
+        } else {
+            let borrow_value = table::borrow_mut(&mut user_position.borrows, debt_type);
+            *borrow_value = remaining_debt;
+            let index_snapshot = table::borrow_mut(&mut user_position.borrow_index_snapshots, debt_type);
+            *index_snapshot = debt_pool.borrow_index;
+        };
+
+        // 更新被清算用户的抵押品记录
+        let actual_supply = calculate_user_actual_supply_amount(collateral_pool, user_position, collateral_type);
+        assert!(actual_supply >= collateral_amount, 0);
+        
+        let remaining_supply = actual_supply - collateral_amount;
+        if (remaining_supply == 0) {
+            table::remove(&mut user_position.supplies, collateral_type);
+            table::remove(&mut user_position.supply_index_snapshots, collateral_type);
+        } else {
+            let supply_value = table::borrow_mut(&mut user_position.supplies, collateral_type);
+            *supply_value = remaining_supply;
+            let index_snapshot = table::borrow_mut(&mut user_position.supply_index_snapshots, collateral_type);
+            *index_snapshot = collateral_pool.supply_index;
+        };
+
+        // 更新借款总额
+        debt_pool.total_borrows = debt_pool.total_borrows - actual_liquidate_amount;
+        collateral_pool.total_supplies = collateral_pool.total_supplies - collateral_amount;
+
+        // 将清算人的代币存入债务资金池
+        let split_debt_coin = coin::split(debt_coin, actual_liquidate_amount, ctx);
+        let debt_balance = coin::into_balance(split_debt_coin);
+        balance::join(&mut debt_pool.reserves, debt_balance);
+
+        // 从抵押品资金池取出抵押品给清算人
+        let collateral_balance = balance::split(&mut collateral_pool.reserves, collateral_amount);
+        let collateral_coin = coin::from_balance(collateral_balance, ctx);
+        transfer::public_transfer(collateral_coin, liquidator);
+
+        // 尝试归还捐赠储备金
+        restore_donation_reserves(debt_pool, actual_liquidate_amount);
+
+        // 更新利率
+        update_interest_rate(debt_pool, clock);
+        update_interest_rate(collateral_pool, clock);
+
+        // 发出清算事件
+        event::emit(
+            LiquidationEvent {
+                liquidator,
+                user: liquidate_user,
+                debt_asset_type: debt_type,
+                collateral_asset_type: collateral_type,
+                debt_amount: actual_liquidate_amount,
+                collateral_amount
+            }
+        );
+    }
 
     public entry fun update_asset_price_a<CoinType>(
         storage: &mut LendingStorage,
         cetus_pool: &CetusPool<CoinType, TESTSUI>,
+        clock: &Clock,
     ) {
         let coin_type = type_name::get<CoinType>();
         
@@ -1710,11 +1894,19 @@ module pumpsui::lending_core {
             coin_type
         );
         *stored_price = price;
+
+        // 更新价格更新时间
+        let update_time = table::borrow_mut(
+            &mut storage.price_update_time,
+            coin_type
+        );
+        *update_time = clock::timestamp_ms(clock);
     }
 
     public entry fun update_asset_price_b<CoinType>(
         storage: &mut LendingStorage,
         cetus_pool: &CetusPool<TESTSUI, CoinType>,
+        clock: &Clock,
     ) {
         let coin_type = type_name::get<CoinType>();
         
@@ -1732,6 +1924,13 @@ module pumpsui::lending_core {
             coin_type
         );
         *stored_price = price;
+
+        // 更新价格更新时间
+        let update_time = table::borrow_mut(
+            &mut storage.price_update_time,
+            coin_type
+        );
+        *update_time = clock::timestamp_ms(clock);
     }
 
     // === 查询函数 ===
@@ -1895,6 +2094,7 @@ module pumpsui::lending_core {
                     asset_info.type_name
                 );
 
+                if (asset_info.type_name != type_name::get<TESTSUI>() && price < MIN_BORROW_PRICE) continue;
                 // 将抵押物价值转换为 SUI (使用清算阈值)
                 let value_in_threshold = (
                     (supply_amount as u128) * price * (
@@ -1902,6 +2102,7 @@ module pumpsui::lending_core {
                     )
                 ) / (100 * DECIMAL);
                 total_collateral_in_threshold = total_collateral_in_threshold + value_in_threshold;
+                
             };
             i = i + 1;
         };
@@ -1978,6 +2179,7 @@ module pumpsui::lending_core {
                     asset_info.type_name
                 );
 
+                if (asset_info.type_name != type_name::get<TESTSUI>() && price < MIN_BORROW_PRICE) continue;
                 // 将抵押物价值转换为 SUI (使用 LTV)
                 let value_in_ltv = (
                     (supply_amount as u128) * price * (asset_info.ltv as u128)
@@ -2004,44 +2206,48 @@ module pumpsui::lending_core {
         let total_supplies = pool.total_supplies;
         let total_borrows = pool.total_borrows;
         
-        // 当没有存款时返回基础利率
-        if (total_supplies == 0) {
-            return (R_BASE,0)
-        };
-
-        // 计算利用率 (放大到DECIMAL)
-        let utilization_rate = ((total_borrows as u128) * DECIMAL) / (total_supplies as u128);
-        
-        // 当没有借款时返回基础利率
-        if (utilization_rate == 0) {
-            return (R_BASE,0)
-        };
-
-        // 利用率转换为百分比 (0-10000)
-        let utilization_rate_percent = utilization_rate * 10000 / DECIMAL;
-
-        // 计算基础借款利率
-        let base_borrow_rate = if (utilization_rate_percent <= U_OPTIMAL) {
-            // 第一阶段：线性增长
-            // rate = base_rate + (r_slope1 * u) / u_optimal
-            R_BASE + (R_SLOPE1 * utilization_rate_percent) / U_OPTIMAL
+        // 当存款为0但借款不为0时,返回最高利率
+        if (total_supplies == 0 && total_borrows > 0) {
+            let max_rate = R_BASE + R_SLOPE1 + R_SLOPE2; // 最高利率 = 基础利率 + 第一阶段斜率 + 第二阶段斜率
+            if (max_rate > pool.borrow_interest_rate_discount) {
+                (max_rate, max_rate - pool.borrow_interest_rate_discount)
+            } else {
+                (max_rate, 0)
+            }
+        } else if (total_supplies == 0 || total_borrows == 0) {
+            // 当存款和借款都为0,或只有存款没有借款时,返回基础利率
+            (R_BASE, 0)
         } else {
-            // 第二阶段：超额利用率部分使用更陡的斜率
-            let base_rate = R_BASE + R_SLOPE1; // 在最优利用率点的利率
-            let excess_utilization = utilization_rate_percent - U_OPTIMAL;
-            let max_excess = 10000 - U_OPTIMAL;
+            // 正常计算利率
+            // 计算利用率 (放大到DECIMAL)
+            let utilization_rate = ((total_borrows as u128) * DECIMAL) / (total_supplies as u128);
             
-            // 对超额部分使用更高的斜率
-            let excess_rate = (R_SLOPE2 * excess_utilization) / max_excess;
-            
-            base_rate + excess_rate
-        };
+            // 利用率转换为百分比 (0-10000)
+            let utilization_rate_percent = utilization_rate * 10000 / DECIMAL;
 
-        // 应用借款利率折扣(确保不会低于0)
-        if (base_borrow_rate > pool.borrow_interest_rate_discount) {
-            (base_borrow_rate,base_borrow_rate - pool.borrow_interest_rate_discount)
-        } else {
-            (base_borrow_rate,0)
+            // 计算基础借款利率
+            let base_borrow_rate = if (utilization_rate_percent <= U_OPTIMAL) {
+                // 第一阶段：线性增长
+                // rate = base_rate + (r_slope1 * u) / u_optimal
+                R_BASE + (R_SLOPE1 * utilization_rate_percent) / U_OPTIMAL
+            } else {
+                // 第二阶段：超额利用率部分使用更陡的斜率
+                let base_rate = R_BASE + R_SLOPE1; // 在最优利用率点的利率
+                let excess_utilization = utilization_rate_percent - U_OPTIMAL;
+                let max_excess = 10000 - U_OPTIMAL;
+                
+                // 对超额部分使用更高的斜率
+                let excess_rate = (R_SLOPE2 * excess_utilization) / max_excess;
+                
+                base_rate + excess_rate
+            };
+
+            // 应用借款利率折扣(确保不会低于0)
+            if (base_borrow_rate > pool.borrow_interest_rate_discount) {
+                (base_borrow_rate, base_borrow_rate - pool.borrow_interest_rate_discount)
+            } else {
+                (base_borrow_rate, 0)
+            }
         }
     }
 
