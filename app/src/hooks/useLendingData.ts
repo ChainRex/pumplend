@@ -2,7 +2,7 @@ import { useQueries } from "@tanstack/react-query";
 import { useSuiClient } from "@mysten/dapp-kit";
 import { Lending } from "./useLendingList";
 import { formatUnits } from '../utils/format';
-import { API_BASE_URL } from '../config';
+import { API_BASE_URL, TESTSUI_PACKAGE_ID } from '../config';
 
 interface LendingPoolFields {
   reserves: string;
@@ -45,7 +45,9 @@ export interface LendingPoolData {
   supplyRate: string;
   lastUpdateTime: string;
   ltv: number;
+  price: number;
 }
+
 
 export function useLendingData(lendings?: Lending[]) {
   const suiClient = useSuiClient();
@@ -100,6 +102,31 @@ export function useLendingData(lendings?: Lending[]) {
           }
         };
         
+        let price = 0;
+        if (lending.type === `${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`) {
+          price = 1;
+        } else if (tokenData?.poolId) {
+          const cetusPoolData = await suiClient.getObject({
+            id: tokenData.poolId,
+            options: { showContent: true },
+          });
+
+          if (cetusPoolData.data?.content?.dataType === "moveObject") {
+            const poolFields = cetusPoolData.data.content.fields as any;
+            const coinA = poolFields.coin_a;
+            const coinB = poolFields.coin_b;
+            
+            const testSuiType = `${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`;
+            const isTokenCoinA = lending.type.toLowerCase() > testSuiType.toLowerCase();
+
+            if (isTokenCoinA) {
+              price = Number(coinB) / Number(coinA);
+            } else {
+              price = Number(coinA) / Number(coinB);
+            }
+          }
+        }
+        
         return {
           id: lending.id,
           name: lending.name,
@@ -129,6 +156,7 @@ export function useLendingData(lendings?: Lending[]) {
             true
           ),
           lastUpdateTime: new Date(Number(fields.last_update_time)).toLocaleString(),
+          price,
         } as LendingPoolData;
       },
       enabled: !!lending.lendingPoolId,
