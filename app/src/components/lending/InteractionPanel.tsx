@@ -1,9 +1,9 @@
 import { Box, Flex, Text, Button, Tabs } from "@radix-ui/themes";
 
-export function InteractionPanel({ handleTabChange }: { handleTabChange: (value: string) => void }) {
+export function InteractionPanel({ handleTabChange, defaultTab = "supply" }: { handleTabChange: (value: string) => void, defaultTab?: string }) {
   return (
     <Box className="interaction-panel" style={{ flex: 1 }}>
-      <Tabs.Root defaultValue="supply" onValueChange={handleTabChange}>
+      <Tabs.Root defaultValue={defaultTab} onValueChange={handleTabChange}>
         <Tabs.List>
           <Tabs.Trigger value="supply">Supply</Tabs.Trigger>
           <Tabs.Trigger value="borrow">Borrow</Tabs.Trigger>

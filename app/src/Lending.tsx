@@ -77,8 +77,8 @@ export function Lending() {
   };
 
   return (
-    <Container className="lending-container">
-      <Flex gap="6" mb="6">
+    <Container className="lending-container" style={{ padding: '0 8px', maxWidth: '100%', margin: '0 auto' }}>
+      <Flex gap="4" mb="4" wrap="wrap">
         <OverviewCard
           title="Your Supplies"
           value={mockData.supplies.totalValue}
@@ -97,12 +97,14 @@ export function Lending() {
         />
       </Flex>
 
-      <Flex gap="6">
-        <Box className="main-content" style={{ flex: 3 }}>
+      <Flex gap="4" wrap="wrap">
+        <Box className="main-content" style={{ flex: 4 }}>
           <SuppliedAssetsTable assets={mockData.suppliedAssets} />
           <AssetsToSupplyTable assets={mockData.assetsToSupply} />
         </Box>
-        <InteractionPanel handleTabChange={handleTabChange} />
+        <Box style={{ flex: 2 }}>
+          <InteractionPanel handleTabChange={handleTabChange} />
+        </Box>
       </Flex>
     </Container>
   );
