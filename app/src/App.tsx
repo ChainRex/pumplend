@@ -179,12 +179,6 @@ function Navigation() {
             Lending
           </button>
           <button 
-            className={`nav-button ${location.pathname === '/lendingtest' ? 'active' : ''}`}
-            onClick={() => navigate("/lendingtest")}
-          >
-            Lending Test
-          </button>
-          <button 
             className={`nav-button ${location.pathname === '/trade' ? 'active' : ''}`}
             onClick={() => navigate("/trade")}
           >
