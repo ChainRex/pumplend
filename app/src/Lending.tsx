@@ -4,6 +4,7 @@ import { OverviewCard } from "./components/lending/OverviewCard";
 import { SuppliedAssetsTable } from "./components/lending/SuppliedAssetsTable";
 import { AssetsToSupplyTable } from "./components/lending/AssetsToSupplyTable";
 import { InteractionPanel } from "./components/lending/InteractionPanel";
+import { HealthFactorCard } from "./components/lending/HealthFactorCard";
 
 // 假数据
 const mockData = {
@@ -78,23 +79,25 @@ export function Lending() {
 
   return (
     <Container className="lending-container" style={{ padding: '0 8px', maxWidth: '100%', margin: '0 auto' }}>
-      <Flex gap="4" mb="4" wrap="wrap">
-        <OverviewCard
-          title="Your Supplies"
-          value={mockData.supplies.totalValue}
-          apy={mockData.supplies.apy}
-          percentage={mockData.supplies.percentage}
-        />
-        <OverviewCard
-          title="Your Borrows"
-          value={mockData.borrows.totalValue}
-          apy={mockData.borrows.apy}
-        />
-        <OverviewCard
-          title="Health Factor"
-          value={mockData.healthFactor}
-          isHealthFactor
-        />
+      <Flex gap="4" mb="4" wrap="wrap" style={{ width: '100%' }}>
+        <Box style={{ flex: 1, minWidth: '300px' }}>
+          <OverviewCard
+            title="Your Supplies"
+            value={mockData.supplies.totalValue}
+            apy={mockData.supplies.apy}
+            percentage={mockData.supplies.percentage}
+          />
+        </Box>
+        <Box style={{ flex: 1, minWidth: '300px' }}>
+          <OverviewCard
+            title="Your Borrows"
+            value={mockData.borrows.totalValue}
+            apy={mockData.borrows.apy}
+          />
+        </Box>
+        <Box style={{ flex: 1, minWidth: '300px' }}>
+          <HealthFactorCard value={mockData.healthFactor} />
+        </Box>
       </Flex>
 
       <Flex gap="4" wrap="wrap">
