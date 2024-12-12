@@ -75,27 +75,29 @@ export function AssetsToBorrowTable({
   });
 
   // 处理数据转换
-  const assetsToBorrow = lendingPoolsData.map((pool) => {
-    const borrowRateMatch = pool.borrowRate.match(/(\d+\.\d+)%\s*\((\d+\.\d+)%\s*-\s*(\d+\.\d+)%\)/);
-    const totalRate = borrowRateMatch ? parseFloat(borrowRateMatch[1]) : 0;
-    const baseRate = borrowRateMatch ? parseFloat(borrowRateMatch[2]) : 0;
-    const discountRate = borrowRateMatch ? parseFloat(borrowRateMatch[3]) : 0;
+  const assetsToBorrow = lendingPoolsData
+    .filter(pool => pool.symbol === 'TESTSUI' || pool.price >= 0.0125)
+    .map((pool) => {
+      const borrowRateMatch = pool.borrowRate.match(/(\d+\.\d+)%\s*\((\d+\.\d+)%\s*-\s*(\d+\.\d+)%\)/);
+      const totalRate = borrowRateMatch ? parseFloat(borrowRateMatch[1]) : 0;
+      const baseRate = borrowRateMatch ? parseFloat(borrowRateMatch[2]) : 0;
+      const discountRate = borrowRateMatch ? parseFloat(borrowRateMatch[3]) : 0;
 
-    const availableAmount = pool.reserves;
-    const availableValue = (parseFloat(availableAmount) * pool.price).toFixed(2);
+      const availableAmount = pool.reserves;
+      const availableValue = (parseFloat(availableAmount) * pool.price).toFixed(2);
 
-    return {
-      name: pool.name,
-      symbol: pool.symbol,
-      logo: pool.icon,
-      available: pool.reserves,
-      value: availableValue,
-      apy: totalRate.toFixed(2),
-      baseRate: baseRate.toFixed(2),
-      discountRate: discountRate.toFixed(2),
-      pool: pool
-    };
-  });
+      return {
+        name: pool.name,
+        symbol: pool.symbol,
+        logo: pool.icon,
+        available: pool.reserves,
+        value: availableValue,
+        apy: totalRate.toFixed(2),
+        baseRate: baseRate.toFixed(2),
+        discountRate: discountRate.toFixed(2),
+        pool: pool
+      };
+    });
 
   return (
     <Box className="section-card">

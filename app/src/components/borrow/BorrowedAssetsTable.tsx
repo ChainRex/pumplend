@@ -49,6 +49,10 @@ export function BorrowedAssetsTable({
     const pool = lendingPoolsData.find(p => p.type === `0x${asset.name}`);
     if (!pool) return null;
 
+    if (pool.symbol !== 'TESTSUI' && pool.price < 0.0125) {
+      return null;
+    }
+
     const borrowAmount = formatUnits(userPosition.borrows[index], 9);
     const value = (parseFloat(borrowAmount) * pool.price).toFixed(2);
 
