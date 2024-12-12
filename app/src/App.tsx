@@ -151,7 +151,7 @@ function Navigation() {
               showToast('保存借贷池信息失败', 'error');
             }
           },
-          onError: (error) => {
+          onError: () => {
             showToast('添加 TESTSUI 失败', 'error');
           },
         }

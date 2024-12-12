@@ -1,7 +1,6 @@
 import { Box, Flex, Text, Button } from "@radix-ui/themes";
 import { useLendingList } from "../../hooks/useLendingList";
 import { LendingPoolData, useLendingData } from "../../hooks/useLendingData";
-import { useCurrentAccount } from "@mysten/dapp-kit";
 import { formatUnits } from '../../utils/format';
 import { ClipLoader } from "react-spinners";
 

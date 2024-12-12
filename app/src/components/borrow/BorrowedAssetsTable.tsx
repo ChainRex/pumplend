@@ -38,9 +38,7 @@ export function BorrowedAssetsTable({
   userPosition, 
   isLoading,
   onBorrowClick,
-  onRepayClick,
-  maxBorrowValue = "0"
-}: BorrowedAssetsTableProps) {
+  onRepayClick}: BorrowedAssetsTableProps) {
   const { data: lendings } = useLendingList();
   const lendingPoolsData = useLendingData(lendings);
 

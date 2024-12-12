@@ -1,5 +1,4 @@
 import { Box, Flex, Text } from "@radix-ui/themes";
-import { InfoCircledIcon } from '@radix-ui/react-icons';
 
 interface OverviewCardProps {
   title: string;

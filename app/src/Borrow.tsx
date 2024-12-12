@@ -53,9 +53,9 @@ export function Borrow() {
   const suiClient = useSuiClient();
   const [userPosition, setUserPosition] = useState<UserPositionEvent | null>(null);
   const [healthFactor, setHealthFactor] = useState<string | null>(null);
-  const [maxBorrowValue, setMaxBorrowValue] = useState<string | null>(null);
+  const [, setMaxBorrowValue] = useState<string | null>(null);
   const [isLoadingPosition, setIsLoadingPosition] = useState(false);
-  const [userAssets, setUserAssets] = useState<Map<string, UserAssetData>>(new Map());
+  const [, setUserAssets] = useState<Map<string, UserAssetData>>(new Map());
   const [selectedAsset, setSelectedAsset] = useState<LendingPoolData | undefined>();
   const [selectedUserSupplied, setSelectedUserSupplied] = useState<string>("0");
   const { data: lendings } = useLendingList();

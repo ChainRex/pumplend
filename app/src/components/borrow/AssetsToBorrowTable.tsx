@@ -1,9 +1,6 @@
 import { Box, Flex, Text, Button } from "@radix-ui/themes";
 import { useLendingList } from "../../hooks/useLendingList";
 import { LendingPoolData, useLendingData } from "../../hooks/useLendingData";
-import { formatUnits } from '../../utils/format';
-import { useQueries } from "@tanstack/react-query";
-import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
 
 interface AssetsToBorrowTableProps {
   onBorrowClick: (asset: LendingPoolData) => void;
@@ -33,46 +30,9 @@ function APYTooltip({ baseRate, discountRate, totalRate }: { baseRate: string; d
 }
 
 export function AssetsToBorrowTable({ 
-  onBorrowClick,
-  maxBorrowValue = "0"
-}: AssetsToBorrowTableProps) {
+  onBorrowClick}: AssetsToBorrowTableProps) {
   const { data: lendings } = useLendingList();
   const lendingPoolsData = useLendingData(lendings);
-  const currentAccount = useCurrentAccount();
-  const suiClient = useSuiClient();
-
-  // 添加自动更新查询
-  const balanceQueries = useQueries({
-    queries: lendingPoolsData.map(pool => ({
-      queryKey: ["tokenBalance", currentAccount?.address, pool.type],
-      queryFn: async () => {
-        if (!currentAccount?.address || !pool.type) {
-          return { formatted: "0", raw: BigInt(0) };
-        }
-
-        const coins = await suiClient.getCoins({
-          owner: currentAccount.address,
-          coinType: pool.type,
-        });
-
-        const totalBalance = coins.data.reduce(
-          (sum, coin) => sum + BigInt(coin.balance),
-          BigInt(0)
-        );
-
-        return {
-          formatted: (Number(totalBalance) / 1e9).toFixed(4),
-          raw: totalBalance
-        };
-      },
-      enabled: !!currentAccount?.address && !!pool.type,
-      retry: 2,
-      refetchInterval: 3000,  // 每3秒更新一次
-      refetchOnMount: true,
-      refetchOnWindowFocus: true,
-      refetchOnReconnect: true
-    }))
-  });
 
   // 处理数据转换
   const assetsToBorrow = lendingPoolsData

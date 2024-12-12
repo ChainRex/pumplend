@@ -2,21 +2,8 @@ import { Box, Flex, Text, Button } from "@radix-ui/themes";
 import { useLendingList } from "../../hooks/useLendingList";
 import { useLendingData, LendingPoolData } from "../../hooks/useLendingData";
 import { useCurrentAccount } from "@mysten/dapp-kit";
-import { useTokenBalance } from "../../hooks/useTokenBalance";
 import { useQueries } from "@tanstack/react-query";
 import { useSuiClient } from "@mysten/dapp-kit";
-import { formatUnits } from "../../utils/format";
-
-interface AssetToSupply {
-  name: string;
-  symbol: string;
-  logo: string;
-  balance: string;
-  apy: string;
-  baseRate: string;
-  bonusRate: string;
-  reserves: string;
-}
 
 // 添加 Tooltip 组件
 function APYTooltip({ baseRate, bonusRate, totalRate }: { baseRate: string; bonusRate: string; totalRate: string }) {

@@ -335,10 +335,6 @@ export function BorrowPanel({
     return "red";
   };
 
-  const formatBalance = (value: string) => {
-    const num = parseFloat(value);
-    return Math.floor(num * 100) / 100;
-  };
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;

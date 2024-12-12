@@ -1,21 +1,17 @@
-import { Box, Button, Container, Flex, Text, Select, Table, TextField } from "@radix-ui/themes";
+import { Box, Button, Container, Flex, Text, Table } from "@radix-ui/themes";
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
-import { Token, useTokenList } from "./hooks/useTokenList";
 import { 
   PUMPLEND_CORE_PACKAGE_ID, 
   LENDING_STORAGE_ID, 
   CLOCK_ID, 
   TESTSUI_PACKAGE_ID,
-  TESTSUI_ICON_URL,
-  TESTSUI_METADATA_ID,
-  API_BASE_URL
 } from "./config";
 import { useLendingList } from "./hooks/useLendingList";
 import { formatUnits } from './utils/format';
 import { useLendingData, LendingPoolData } from './hooks/useLendingData';
 import { useState, useEffect } from 'react';
-import { useQueryClient, useQueries } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTokenBalance } from "./hooks/useTokenBalance";
 import { ClipLoader } from "react-spinners";
 
@@ -33,14 +29,6 @@ interface UserPositionEvent {
   supply_value: string;
 }
 
-// 添加新的接口定义
-interface AddAssetEvent {
-  type_name: {
-    name: string;
-  };
-  ltv: string;
-  liquidation_threshold: string;
-}
 
 // 添加健康因子事件接口
 interface HealthFactorEvent {
@@ -55,23 +43,12 @@ interface RemainingBorrowValueEvent {
 }
 
 export function LendingTest() {
-  const { data: tokens } = useTokenList();
   const { data: lendings, invalidateLendings } = useLendingList();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const currentAccount = useCurrentAccount();
   const suiClient = useSuiClient();
   const queryClient = useQueryClient();
 
-  // 只显示已创建流动性池的代币（包括 TESTSUI
-  const availableTokens = tokens?.filter(token => 
-    token.status === "LIQUIDITY_POOL_CREATED" && 
-    token.type !== `${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`
-  ) || [];
-
-  // 获取 TESTSUI 代币信息
-  const testSuiToken = tokens?.find(token => 
-    token.type === `${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`
-  );
 
   // 获取借贷池数据
   const lendingPoolsData = useLendingData(lendings);
