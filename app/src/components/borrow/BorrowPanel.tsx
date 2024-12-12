@@ -319,7 +319,7 @@ export function BorrowPanel({
     
     const maxAmount = mode === 'borrow' ? 
       parseFloat(maxBorrowValue) : 
-      (balance ? parseFloat(balance.formatted) : 0);
+      (balance?.raw ? Number(balance.raw) / 1e9 : 0);
     
     if (numValue > maxAmount) return false;
     return true;
@@ -368,7 +368,7 @@ export function BorrowPanel({
     if (value) {
       const maxAmount = mode === 'borrow' ? 
         parseFloat(maxBorrowValue) : 
-        (balance ? parseFloat(balance.formatted) : 0);
+        (balance?.raw ? Number(balance.raw) / 1e9 : 0);
       
       if (numValue > maxAmount) {
         setPreviewHealthFactor(null);
