@@ -5,7 +5,7 @@ import { useTokenBalance } from "../../hooks/useTokenBalance";
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { ClipLoader } from "react-spinners";
 import { Transaction } from "@mysten/sui/transactions";
-import { CLOCK_ID, LENDING_STORAGE_ID, PUMPSUI_CORE_PACKAGE_ID, TESTSUI_PACKAGE_ID } from "../../config";
+import { CLOCK_ID, LENDING_STORAGE_ID, PUMPLEND_CORE_PACKAGE_ID, TESTSUI_PACKAGE_ID } from "../../config";
 
 interface BorrowPanelProps {
   selectedAsset?: LendingPoolData;
@@ -56,7 +56,7 @@ export function BorrowPanel({
       if (mode === 'borrow') {
         if (selectedAsset.symbol === 'TESTSUI') {
           tx.moveCall({
-            target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::borrow_testsui`,
+            target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::borrow_testsui`,
             arguments: [
               tx.object(CLOCK_ID),
               tx.object(LENDING_STORAGE_ID),
@@ -69,7 +69,7 @@ export function BorrowPanel({
           const comparison = selectedAsset.type.toLowerCase() > testSuiType.toLowerCase();
 
           tx.moveCall({
-            target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::borrow_token_${comparison ? 'a' : 'b'}`,
+            target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::borrow_token_${comparison ? 'a' : 'b'}`,
             typeArguments: [selectedAsset.type],
             arguments: [
               tx.object(CLOCK_ID),
@@ -83,7 +83,7 @@ export function BorrowPanel({
       } else {
         if (selectedAsset.symbol === 'TESTSUI') {
           tx.moveCall({
-            target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::repay_testsui`,
+            target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::repay_testsui`,
             arguments: [
               tx.object(CLOCK_ID),
               tx.object(LENDING_STORAGE_ID),
@@ -97,7 +97,7 @@ export function BorrowPanel({
           const comparison = selectedAsset.type.toLowerCase() > testSuiType.toLowerCase();
 
           tx.moveCall({
-            target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::repay_token_${comparison ? 'a' : 'b'}`,
+            target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::repay_token_${comparison ? 'a' : 'b'}`,
             typeArguments: [selectedAsset.type],
             arguments: [
               tx.object(CLOCK_ID),
@@ -112,7 +112,7 @@ export function BorrowPanel({
       }
 
       tx.moveCall({
-        target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::calculate_health_factor`,
+        target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::calculate_health_factor`,
         arguments: [
           tx.object(LENDING_STORAGE_ID),
           tx.pure.address(currentAccount.address)
@@ -162,7 +162,7 @@ export function BorrowPanel({
       if (mode === 'borrow') {
         if (selectedAsset.symbol === 'TESTSUI') {
           tx.moveCall({
-            target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::borrow_testsui`,
+            target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::borrow_testsui`,
             arguments: [
               tx.object(CLOCK_ID),
               tx.object(LENDING_STORAGE_ID),
@@ -175,7 +175,7 @@ export function BorrowPanel({
           const comparison = selectedAsset.type.toLowerCase() > testSuiType.toLowerCase();
 
           tx.moveCall({
-            target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::borrow_token_${comparison ? 'a' : 'b'}`,
+            target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::borrow_token_${comparison ? 'a' : 'b'}`,
             typeArguments: [selectedAsset.type],
             arguments: [
               tx.object(CLOCK_ID),
@@ -189,7 +189,7 @@ export function BorrowPanel({
       } else {
         if (selectedAsset.symbol === 'TESTSUI') {
           tx.moveCall({
-            target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::repay_testsui`,
+            target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::repay_testsui`,
             arguments: [
               tx.object(CLOCK_ID),
               tx.object(LENDING_STORAGE_ID),
@@ -203,7 +203,7 @@ export function BorrowPanel({
           const comparison = selectedAsset.type.toLowerCase() > testSuiType.toLowerCase();
 
           tx.moveCall({
-            target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::repay_token_${comparison ? 'a' : 'b'}`,
+            target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::repay_token_${comparison ? 'a' : 'b'}`,
             typeArguments: [selectedAsset.type],
             arguments: [
               tx.object(CLOCK_ID),

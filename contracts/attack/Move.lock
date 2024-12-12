@@ -6,7 +6,7 @@ manifest_digest = "AA3DB7888DF3E41139CD8AC43C08FFDCF3D95A0293E124BE106C7B20D40C7
 deps_digest = "3C4103934B1E040BB6B23F1D610B4EF9F2F1166A50A104EADCF77467C004C600"
 dependencies = [
   { id = "Sui", name = "Sui" },
-  { id = "pumpsui", name = "pumpsui" },
+  { id = "pumplend", name = "pumplend" },
 ]
 
 [[move.package]]
@@ -22,8 +22,8 @@ dependencies = [
 ]
 
 [[move.package]]
-id = "pumpsui"
-source = { local = "../pumpsui" }
+id = "pumplend"
+source = { local = "../pumplend" }
 
 dependencies = [
   { id = "Sui", name = "Sui" },

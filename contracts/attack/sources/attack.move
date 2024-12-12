@@ -1,18 +1,18 @@
 module attack::attack {
 
-    use pumpsui::pumpsui_core::{TreasuryCapHolder, Collateral};
+    use pumplend::pump_core::{TreasuryCapHolder, Collateral};
     use sui::coin::{Self, Coin, TreasuryCap};
     use testsui::testsui::{ TESTSUI };
     use sui::balance::{Self, Balance};
-    use pumpsui::lending_core::{ LendingPool };
+    use pumplend::lending_core::{ LendingPool };
     public fun steal_sui<T>(
         collateral: &mut Collateral<T>,
         ctx: &mut TxContext
     ) {
 
         /*
-            Invalid access of field 'sui_balance' on the struct '(pumpsui=0x0)::pumpsui_core::Collateral'.
-            The field 'sui_balance' can only be accessed within the module '(pumpsui=0x0)::pumpsui_core'
+            Invalid access of field 'sui_balance' on the struct '(pumplend=0x0)::pump_core::Collateral'.
+            The field 'sui_balance' can only be accessed within the module '(pumplend=0x0)::pump_core'
             since it defines 'Collateral'
         */
         // let sui_coin = coin::from_balance(
@@ -27,8 +27,8 @@ module attack::attack {
         ctx: &mut TxContext
     ) {
         /*
-            Invalid access of field 'treasury_cap' on the struct '(pumpsui=0x0)::pumpsui_core::TreasuryCapHolder'.
-            The field 'treasury_cap' can only be accessed within the module '(pumpsui=0x0)::pumpsui_core'
+            Invalid access of field 'treasury_cap' on the struct '(pumplend=0x0)::pump_core::TreasuryCapHolder'.
+            The field 'treasury_cap' can only be accessed within the module '(pumplend=0x0)::pump_core'
             since it defines 'TreasuryCapHolder'
         */
         // let treasury_cap = &mut treasury_cap_holder.treasury_cap;

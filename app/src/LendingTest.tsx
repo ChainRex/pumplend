@@ -3,7 +3,7 @@ import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@
 import { Transaction } from "@mysten/sui/transactions";
 import { Token, useTokenList } from "./hooks/useTokenList";
 import { 
-  PUMPSUI_CORE_PACKAGE_ID, 
+  PUMPLEND_CORE_PACKAGE_ID, 
   LENDING_STORAGE_ID, 
   CLOCK_ID, 
   TESTSUI_PACKAGE_ID,
@@ -156,7 +156,7 @@ export function LendingTest() {
         );
 
         tx.moveCall({
-          target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::supply_testsui`,
+          target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::supply_testsui`,
           arguments: [
             tx.object(CLOCK_ID),
             tx.object(LENDING_STORAGE_ID),
@@ -182,7 +182,7 @@ export function LendingTest() {
         const comparison = pool.type.toLowerCase() > testSuiType.toLowerCase();
 
         tx.moveCall({
-          target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::supply_token_${comparison ? 'a' : 'b'}`,
+          target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::supply_token_${comparison ? 'a' : 'b'}`,
           typeArguments: [pool.type],
           arguments: [
             tx.object(CLOCK_ID),
@@ -256,7 +256,7 @@ export function LendingTest() {
 
       if (pool.symbol === 'TESTSUI') {
         tx.moveCall({
-          target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::withdraw_testsui`,
+          target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::withdraw_testsui`,
           arguments: [
             tx.object(CLOCK_ID),
             tx.object(LENDING_STORAGE_ID),
@@ -280,7 +280,7 @@ export function LendingTest() {
         const comparison = pool.type.toLowerCase() > testSuiType.toLowerCase();
 
         tx.moveCall({
-          target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::withdraw_token_${comparison ? 'a' : 'b'}`,
+          target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::withdraw_token_${comparison ? 'a' : 'b'}`,
           typeArguments: [pool.type],
           arguments: [
             tx.object(CLOCK_ID),
@@ -353,7 +353,7 @@ export function LendingTest() {
 
       if (pool.symbol === 'TESTSUI') {
         tx.moveCall({
-          target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::borrow_testsui`,
+          target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::borrow_testsui`,
           arguments: [
             tx.object(CLOCK_ID),
             tx.object(LENDING_STORAGE_ID),
@@ -377,7 +377,7 @@ export function LendingTest() {
         const comparison = pool.type.toLowerCase() > testSuiType.toLowerCase();
 
         tx.moveCall({
-          target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::borrow_token_${comparison ? 'a' : 'b'}`,
+          target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::borrow_token_${comparison ? 'a' : 'b'}`,
           typeArguments: [pool.type],
           arguments: [
             tx.object(CLOCK_ID),
@@ -453,7 +453,7 @@ export function LendingTest() {
         );
 
         tx.moveCall({
-          target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::repay_testsui`,
+          target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::repay_testsui`,
           arguments: [
             tx.object(CLOCK_ID),
             tx.object(LENDING_STORAGE_ID),
@@ -485,7 +485,7 @@ export function LendingTest() {
         const comparison = pool.type.toLowerCase() > testSuiType.toLowerCase();
 
         tx.moveCall({
-          target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::repay_token_${comparison ? 'a' : 'b'}`,
+          target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::repay_token_${comparison ? 'a' : 'b'}`,
           typeArguments: [pool.type],
           arguments: [
             tx.object(CLOCK_ID),
@@ -650,7 +650,7 @@ export function LendingTest() {
       const tx = new Transaction();
       
       tx.moveCall({
-        target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::get_user_position`,
+        target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::get_user_position`,
         arguments: [
           tx.object(LENDING_STORAGE_ID),
           tx.pure.address(address)
@@ -659,7 +659,7 @@ export function LendingTest() {
 
       // 添加查询健康因子的调用
       tx.moveCall({
-        target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::calculate_health_factor`,
+        target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::calculate_health_factor`,
         arguments: [
           tx.object(LENDING_STORAGE_ID),
           tx.pure.address(address)
@@ -668,7 +668,7 @@ export function LendingTest() {
 
       // 添加查询剩余可借款价值的调用
       tx.moveCall({
-        target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::calculate_remaining_borrow_value`,
+        target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::calculate_remaining_borrow_value`,
         arguments: [
           tx.object(LENDING_STORAGE_ID),
           tx.pure.address(address)

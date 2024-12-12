@@ -5,7 +5,7 @@ import { useTokenBalance } from "../../hooks/useTokenBalance";
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { ClipLoader } from "react-spinners";
 import { Transaction } from "@mysten/sui/transactions";
-import { CLOCK_ID, LENDING_STORAGE_ID, PUMPSUI_CORE_PACKAGE_ID, TESTSUI_PACKAGE_ID } from "../../config";
+import { CLOCK_ID, LENDING_STORAGE_ID, PUMPLEND_CORE_PACKAGE_ID, TESTSUI_PACKAGE_ID } from "../../config";
 
 interface SupplyPanelProps {
   selectedAsset?: LendingPoolData;
@@ -141,7 +141,7 @@ export function SupplyPanel({
         // 先添加 supply 交易
         if (selectedAsset.symbol === 'TESTSUI') {
           tx.moveCall({
-            target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::supply_testsui`,
+            target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::supply_testsui`,
             arguments: [
               tx.object(CLOCK_ID),
               tx.object(LENDING_STORAGE_ID),
@@ -156,7 +156,7 @@ export function SupplyPanel({
           const comparison = selectedAsset.type.toLowerCase() > testSuiType.toLowerCase();
 
           tx.moveCall({
-            target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::supply_token_${comparison ? 'a' : 'b'}`,
+            target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::supply_token_${comparison ? 'a' : 'b'}`,
             typeArguments: [selectedAsset.type],
             arguments: [
               tx.object(CLOCK_ID),
@@ -172,7 +172,7 @@ export function SupplyPanel({
         // withdraw 逻辑
         if (selectedAsset.symbol === 'TESTSUI') {
           tx.moveCall({
-            target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::withdraw_testsui`,
+            target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::withdraw_testsui`,
             arguments: [
               tx.object(CLOCK_ID),
               tx.object(LENDING_STORAGE_ID),
@@ -185,7 +185,7 @@ export function SupplyPanel({
           const comparison = selectedAsset.type.toLowerCase() > testSuiType.toLowerCase();
 
           tx.moveCall({
-            target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::withdraw_token_${comparison ? 'a' : 'b'}`,
+            target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::withdraw_token_${comparison ? 'a' : 'b'}`,
             typeArguments: [selectedAsset.type],
             arguments: [
               tx.object(CLOCK_ID),
@@ -200,7 +200,7 @@ export function SupplyPanel({
 
       // 在交易之后添加健康因子查询
       tx.moveCall({
-        target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::calculate_health_factor`,
+        target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::calculate_health_factor`,
         arguments: [
           tx.object(LENDING_STORAGE_ID),
           tx.pure.address(currentAccount.address)
@@ -336,7 +336,7 @@ export function SupplyPanel({
         // 原有的 supply 逻辑保持不变
         if (selectedAsset.symbol === 'TESTSUI') {
           tx.moveCall({
-            target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::supply_testsui`,
+            target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::supply_testsui`,
             arguments: [
               tx.object(CLOCK_ID),
               tx.object(LENDING_STORAGE_ID),
@@ -351,7 +351,7 @@ export function SupplyPanel({
           const comparison = selectedAsset.type.toLowerCase() > testSuiType.toLowerCase();
 
           tx.moveCall({
-            target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::supply_token_${comparison ? 'a' : 'b'}`,
+            target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::supply_token_${comparison ? 'a' : 'b'}`,
             typeArguments: [selectedAsset.type],
             arguments: [
               tx.object(CLOCK_ID),
@@ -367,7 +367,7 @@ export function SupplyPanel({
         // withdraw 逻辑
         if (selectedAsset.symbol === 'TESTSUI') {
           tx.moveCall({
-            target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::withdraw_testsui`,
+            target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::withdraw_testsui`,
             arguments: [
               tx.object(CLOCK_ID),
               tx.object(LENDING_STORAGE_ID),
@@ -380,7 +380,7 @@ export function SupplyPanel({
           const comparison = selectedAsset.type.toLowerCase() > testSuiType.toLowerCase();
 
           tx.moveCall({
-            target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::withdraw_token_${comparison ? 'a' : 'b'}`,
+            target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::withdraw_token_${comparison ? 'a' : 'b'}`,
             typeArguments: [selectedAsset.type],
             arguments: [
               tx.object(CLOCK_ID),

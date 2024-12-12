@@ -1,4 +1,4 @@
-module pumpsui::lending_core {
+module pumplend::lending_core {
     use sui::table::{Self, Table};
     use sui::coin::{Self, Coin};
     use sui::balance::{Self, Balance};

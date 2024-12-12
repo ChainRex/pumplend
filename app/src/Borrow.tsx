@@ -2,7 +2,7 @@ import { Box, Container, Flex } from "@radix-ui/themes";
 import { useNavigate } from "react-router-dom";
 import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
-import { PUMPSUI_CORE_PACKAGE_ID, LENDING_STORAGE_ID } from "./config";
+import { PUMPLEND_CORE_PACKAGE_ID, LENDING_STORAGE_ID } from "./config";
 import { formatUnits } from './utils/format';
 import { OverviewCard } from "./components/lending/OverviewCard";
 import { BorrowedAssetsTable } from "./components/borrow/BorrowedAssetsTable";
@@ -79,7 +79,7 @@ export function Borrow() {
       const tx = new Transaction();
       
       tx.moveCall({
-        target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::get_user_position`,
+        target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::get_user_position`,
         arguments: [
           tx.object(LENDING_STORAGE_ID),
           tx.pure.address(address)
@@ -87,7 +87,7 @@ export function Borrow() {
       });
 
       tx.moveCall({
-        target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::calculate_health_factor`,
+        target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::calculate_health_factor`,
         arguments: [
           tx.object(LENDING_STORAGE_ID),
           tx.pure.address(address)
@@ -95,7 +95,7 @@ export function Borrow() {
       });
 
       tx.moveCall({
-        target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::calculate_max_borrow_value`,
+        target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::calculate_max_borrow_value`,
         arguments: [
           tx.object(LENDING_STORAGE_ID),
           tx.pure.address(address)
@@ -103,7 +103,7 @@ export function Borrow() {
       });
 
       tx.moveCall({
-        target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::calculate_remaining_borrow_value`,
+        target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::calculate_remaining_borrow_value`,
         arguments: [
           tx.object(LENDING_STORAGE_ID),
           tx.pure.address(address)
@@ -181,7 +181,7 @@ export function Borrow() {
     const tx = new Transaction();
     
     tx.moveCall({
-      target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::get_user_position`,
+      target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::get_user_position`,
       arguments: [
         tx.object(LENDING_STORAGE_ID),
         tx.pure.address(currentAccount.address)
@@ -189,7 +189,7 @@ export function Borrow() {
     });
 
     tx.moveCall({
-      target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::calculate_health_factor`,
+      target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::calculate_health_factor`,
       arguments: [
         tx.object(LENDING_STORAGE_ID),
         tx.pure.address(currentAccount.address)
@@ -197,7 +197,7 @@ export function Borrow() {
     });
 
     tx.moveCall({
-      target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::calculate_max_borrow_value`,
+      target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::calculate_max_borrow_value`,
       arguments: [
         tx.object(LENDING_STORAGE_ID),
         tx.pure.address(currentAccount.address)

@@ -1,4 +1,4 @@
-module pumpsui::pumpsui_core {
+module pumplend::pump_core {
     use sui::object::{Self, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
@@ -6,7 +6,7 @@ module pumpsui::pumpsui_core {
     use sui::balance::{Self, Balance};
     use sui::math;
     use testsui::testsui::{ TESTSUI };
-    use pumpsui::bonding_curve;
+    use pumplend::bonding_curve;
     use cetus_clmm::pool_creator;
     use cetus_clmm::config::GlobalConfig;
     use cetus_clmm::factory::Pools as CetusPools;
@@ -16,7 +16,7 @@ module pumpsui::pumpsui_core {
     use sui::clock::Clock;
     use sui::coin::CoinMetadata;
     use sui::event;
-    use pumpsui::lending_core::{Self, LendingStorage, LendingPool};
+    use pumplend::lending_core::{Self, LendingStorage, LendingPool};
 
     const DECIMALS: u64 = 1_000_000_000;
     const MAX_SUPPLY: u64 = 1_000_000_000 * DECIMALS;

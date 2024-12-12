@@ -1,4 +1,4 @@
-module pumpsui::bonding_curve {
+module pumplend::bonding_curve {
     use legato_math::fixed_point64::{Self, FixedPoint64};
     use legato_math::math_fixed64;
     use legato_math::legato_math;
