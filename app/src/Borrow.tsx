@@ -160,12 +160,6 @@ export function Borrow() {
       {/* 顶部概览区 */}
       <Flex gap="6" mb="6">
         <OverviewCard 
-          title="Your Borrows" 
-          value={mockData.borrows.totalValue} 
-          apy={mockData.borrows.apy ?? 0}
-          percentage={mockData.borrows.percentage}
-        />
-        <OverviewCard 
           title="Your Supplies" 
           value={mockData.supplies.totalValue} 
           apy={mockData.supplies.apy}

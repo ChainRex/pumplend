@@ -44,6 +44,7 @@ export interface LendingPoolData {
   borrowRate: string;
   supplyRate: string;
   lastUpdateTime: string;
+  totalAvailableReserves:string;
   ltv: number;
   price: number;
 }
@@ -54,7 +55,7 @@ export function useLendingData(lendings?: Lending[]) {
 
   const results = useQueries({
     queries: (lendings || []).map((lending) => ({
-      queryKey: ["lending", lending.lendingPoolId],
+      queryKey: ["lendingPool", lending.id],
       queryFn: async () => {
         const poolData = await suiClient.getObject({
           id: lending.lendingPoolId,
@@ -68,6 +69,7 @@ export function useLendingData(lendings?: Lending[]) {
         }
 
         const fields = poolData.data.content.fields as unknown as LendingPoolFields;
+        
         
         const tokenResponse = await fetch(`${API_BASE_URL}/tokens/${lending.type}/pool`);
         const tokenData = await tokenResponse.json();
@@ -83,7 +85,7 @@ export function useLendingData(lendings?: Lending[]) {
         
         const formatRate = (baseRate: number, adjustment: number, isSupply: boolean) => {
           const baseRatePercent = (baseRate / 1e4) * 100;
-          const adjustmentPercent = (adjustment / 1e2) * 100;
+          const adjustmentPercent = (adjustment / 1e4) * 100;
           
           if (isSupply) {
             // 存款利率 = 基础利率 + 加成
@@ -136,7 +138,8 @@ export function useLendingData(lendings?: Lending[]) {
           lendingPoolId: lending.lendingPoolId,
           cetusPoolId: tokenData?.poolId,
           ltv: lending.ltv,
-          reserves: formatUnits(totalAvailableReserves.toString(), lending.decimals),
+          reserves:formatUnits(reserves.toString(), lending.decimals),
+          totalAvailableReserves: formatUnits(totalAvailableReserves.toString(), lending.decimals),
           donationReserves: formatUnits(fields.donation_reserves || "0", lending.decimals),
           totalDonations: formatUnits(fields.total_donations || "0", lending.decimals),
           donationsLentOut: formatUnits(fields.donations_lent_out || "0", lending.decimals),
@@ -160,6 +163,10 @@ export function useLendingData(lendings?: Lending[]) {
         } as LendingPoolData;
       },
       enabled: !!lending.lendingPoolId,
+      refetchInterval: 3000,
+      refetchIntervalInBackground: false,
+      staleTime: 2000,
+      cacheTime: 5000,
     })),
   });
 

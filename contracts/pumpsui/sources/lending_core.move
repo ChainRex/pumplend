@@ -36,10 +36,10 @@ module pumpsui::lending_core {
     const LIQUIDATION_DISCOUNT: u64 = 20; // 20% 折扣
 
     // 借款利率折扣
-    const BORROW_INTEREST_RATE_DISCOUNT_INITIAL: u128 = 25; // 25%
+    const BORROW_INTEREST_RATE_DISCOUNT_INITIAL: u128 = 2500; // 25%
 
     // 存款利率加成
-    const SUPPLY_INTEREST_RATE_BONUS_INITIAL: u128 = 25; // 25%
+    const SUPPLY_INTEREST_RATE_BONUS_INITIAL: u128 = 2500; // 25%
 
     const DECIMAL: u128 = 1_000_000_000;
 
@@ -2119,6 +2119,12 @@ module pumpsui::lending_core {
 
         // 如果没有借款,返回最大健康因子
         if (total_borrows_in_sui == 0) {
+            event::emit(
+            CalculateHealthFactorEvent {
+                user,
+                health_factor: 1000000
+            }
+        );
             return 1000000
         };
         event::emit(
@@ -2199,13 +2205,18 @@ module pumpsui::lending_core {
         let user_position = table::borrow(&storage.user_positions, user);
         let max_borrow_value = calculate_max_borrow_value(storage, user);
         let total_borrow_value = calculate_user_total_borrow_value_with_additional_weight(user_position, storage);
+        let remaining_value = if (max_borrow_value < total_borrow_value) {
+            0
+        } else {
+            max_borrow_value - total_borrow_value
+        };
         event::emit(
             CalculateRemainingBorrowValueEvent {
                 user,
-                remaining_borrow_value: max_borrow_value - total_borrow_value
+                remaining_borrow_value: remaining_value
             }
         );
-        max_borrow_value - total_borrow_value
+        remaining_value
     }
 
     
@@ -2222,11 +2233,9 @@ module pumpsui::lending_core {
         // 当存款为0但借款不为0时,返回最高利率
         if (total_supplies == 0 && total_borrows > 0) {
             let max_rate = R_BASE + R_SLOPE1 + R_SLOPE2; // 最高利率 = 基础利率 + 第一阶段斜率 + 第二阶段斜率
-            if (max_rate > pool.borrow_interest_rate_discount) {
-                (max_rate, max_rate - pool.borrow_interest_rate_discount)
-            } else {
-                (max_rate, 0)
-            }
+
+            let discount = (pool.borrow_interest_rate_discount * 100) / 10000;
+            (max_rate, max_rate - discount)
         } else if (total_supplies == 0 || total_borrows == 0) {
             // 当存款和借款都为0,或只有存款没有借款时,返回基础利率
             (R_BASE, 0)
@@ -2257,7 +2266,8 @@ module pumpsui::lending_core {
 
             // 应用借款利率折扣(确保不会低于0)
             if (base_borrow_rate > pool.borrow_interest_rate_discount) {
-                (base_borrow_rate, base_borrow_rate - pool.borrow_interest_rate_discount)
+                let discount = (pool.borrow_interest_rate_discount * 100) / 10000;
+                (base_borrow_rate, base_borrow_rate - discount)
             } else {
                 (base_borrow_rate, 0)
             }
@@ -2266,14 +2276,11 @@ module pumpsui::lending_core {
 
     // 修改计算存款利率的函数,加入额外利率加成
     fun compute_supply_rate<CoinType>(pool: &LendingPool<CoinType>) : (u128,u128) {
-        // 计算基础借款利率
         let (borrow_rate,_) = compute_borrow_rate(pool);
-        
-        // 计算基础存款利率 = 借款利率 * (1 - 储备金率)
         let base_supply_rate = ((borrow_rate * (10000 - RESERVE_FACTOR * 100)) / 10000);
-
-        // 加上额外利率加成
-        (base_supply_rate,base_supply_rate + pool.extra_supply_interest_rate_bonus)
+        // 将存款利率加成转换为正确的精度
+        let bonus = (pool.extra_supply_interest_rate_bonus * 100) / 10000;
+        (base_supply_rate, base_supply_rate + bonus)
     }
 
     // 利息因子计算函数
@@ -2307,12 +2314,12 @@ module pumpsui::lending_core {
         // 计算存款利率加成需要的补贴
         let supply_bonus_needed = (
             total_supplies * pool.extra_supply_interest_rate_bonus * (time_delta as u128)
-        ) / (YEAR_MS * 10000);
+        ) / (YEAR_MS * 1000000); // 需要除以 100 * 10000 因为 bonus 现在是 2500 表示 25%
 
         // 计算借款利率折扣需要的补贴
         let borrow_discount_needed = (
             total_borrows * pool.borrow_interest_rate_discount * (time_delta as u128)
-        ) / (YEAR_MS * 10000);
+        ) / (YEAR_MS * 1000000); // 需要除以 100 * 10000 因为 discount 现在是 2500 表示 25%
 
         // 计算本次更新周期需要的总补贴
         let total_subsidy_needed = supply_bonus_needed + borrow_discount_needed;
@@ -2335,11 +2342,22 @@ module pumpsui::lending_core {
             actual_supply_rate = calc_borrow_rate(supply_rate_with_bonus, time_delta);
         };
 
+        // 从捐赠储备金转移补贴到储备金
+        let donation_balance = balance::split(&mut pool.donation_reserves, (total_subsidy_needed as u64));
+        balance::join(&mut pool.reserves, donation_balance);
+
+
         // 更新总借款金额
         let new_total_borrows = (
             total_borrows * (DECIMAL + actual_borrow_rate)
         ) / DECIMAL;
         pool.total_borrows = (new_total_borrows as u64);
+
+        // 更新总存款金额
+        let new_total_supplies = (
+            total_supplies * (DECIMAL + actual_supply_rate)
+        ) / DECIMAL;
+        pool.total_supplies = (new_total_supplies as u64);
 
         // 更新借款累积利率
         let old_borrow_index = pool.borrow_index as u128;
@@ -2547,13 +2565,13 @@ module pumpsui::lending_core {
         ) / 10000;
 
         // 如果调整后的利率激励低于最低阈值,则设为0
-        pool.extra_supply_interest_rate_bonus = if (new_supply_bonus * 100 >= MIN_INTEREST_RATE_BONUS) {
+        pool.extra_supply_interest_rate_bonus = if (new_supply_bonus >= MIN_INTEREST_RATE_BONUS) {
             new_supply_bonus
         } else {
             0
         };
 
-        pool.borrow_interest_rate_discount = if (new_borrow_discount * 100 >= MIN_INTEREST_RATE_BONUS) {
+        pool.borrow_interest_rate_discount = if (new_borrow_discount >= MIN_INTEREST_RATE_BONUS) {
             new_borrow_discount
         } else {
             0

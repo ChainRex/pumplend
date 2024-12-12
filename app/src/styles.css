@@ -467,6 +467,8 @@
   background: var(--gray-a2);
   border-radius: 8px;
   overflow: hidden;
+  position: relative;
+  overflow: visible;
 }
 
 .table-header {
@@ -478,6 +480,8 @@
 
 .table-row {
   border-bottom: 1px solid var(--gray-a4);
+  position: relative;
+  overflow: visible;
 }
 
 .table-row:last-child {
@@ -588,5 +592,50 @@
 .interaction-panel {
   flex: 1 !important;
   min-width: 360px !important;
+}
+
+/* 添加以下样式 */
+.apy-container {
+  position: relative;
+  cursor: pointer;
+}
+
+.apy-tooltip-wrapper {
+  display: none;
+  position: absolute;
+  left: 15%;
+  bottom: 100%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+  background: var(--gray-1);
+  border: 1px solid var(--gray-a4);
+  border-radius: 8px;
+  z-index: 100;
+  min-width: 200px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  white-space: nowrap;
+  overflow: visible;
+}
+
+.apy-tooltip-wrapper::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  transform: translateX(-50%) rotate(45deg);
+  width: 10px;
+  height: 10px;
+  background: var(--gray-2);
+  border-right: 1px solid var(--gray-a4);
+  border-bottom: 1px solid var(--gray-a4);
+}
+
+.apy-container:hover .apy-tooltip-wrapper {
+  display: block;
+}
+
+.apy-tooltip {
+  background: var(--gray-2);
+  border-radius: 8px;
 }
  
