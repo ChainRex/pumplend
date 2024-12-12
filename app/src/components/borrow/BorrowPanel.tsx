@@ -318,7 +318,9 @@ export function BorrowPanel({
     if (!/^\d*\.?\d*$/.test(value)) return false;
     
     const maxAmount = mode === 'borrow' ? 
-      parseFloat(maxBorrowValue) : 
+      (selectedAsset?.symbol === 'TESTSUI' ? 
+        parseFloat(maxBorrowValue) : 
+        (parseFloat(maxBorrowValue) / (selectedAsset?.price || 1)) / 3) : 
       (balance?.raw ? Number(balance.raw) / 1e9 : 0);
     
     if (numValue > maxAmount) return false;
@@ -339,56 +341,64 @@ export function BorrowPanel({
   };
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    
     const value = e.target.value;
     setAmount(value);
     setErrorMessage(null);
     
+    if (previewController) {
+      previewController.abort();
+      setPreviewController(null);
+    }
+    
     if (value && !/^\d*\.?\d*$/.test(value)) {
-      if (previewController) {
-        previewController.abort();
-        setPreviewController(null);
-      }
       setPreviewHealthFactor(null);
       setIsPreviewLoading(false);
       return;
     }
 
     const numValue = parseFloat(value);
+    
     if (isNaN(numValue) || numValue <= 0) {
-      if (previewController) {
-        previewController.abort();
-        setPreviewController(null);
-      }
       setPreviewHealthFactor(null);
       setIsPreviewLoading(false);
       return;
     }
 
-    if (value) {
-      const maxAmount = mode === 'borrow' ? 
+    const maxAmount = mode === 'borrow' ? 
+      (selectedAsset?.symbol === 'TESTSUI' ? 
         parseFloat(maxBorrowValue) : 
-        (balance?.raw ? Number(balance.raw) / 1e9 : 0);
-      
-      if (numValue > maxAmount) {
-        setPreviewHealthFactor(null);
-        setIsPreviewLoading(false);
-        return;
-      }
-      previewBorrow(value);
+        (parseFloat(maxBorrowValue) / (selectedAsset?.price || 1)) / 3) : 
+      (balance?.raw ? Number(balance.raw) / 1e9 : 0);
+
+    if (numValue > maxAmount) {
+      setPreviewHealthFactor(null);
+      setIsPreviewLoading(false);
+      setErrorMessage("Amount exceeds maximum available");
+      return;
     }
+
+    const timeoutId = setTimeout(() => {
+      previewBorrow(value);
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
   };
 
   const handleMaxClick = () => {
+    if (!selectedAsset) return;
+
     const maxAmount = mode === 'borrow' ? 
       calculateAvailableAmount(false) : 
       (balance?.raw ? (Number(balance.raw) / 1e9).toString() : "0");
+    
     setAmount(maxAmount);
-    previewBorrow(maxAmount);
+    
+    setTimeout(() => {
+      previewBorrow(maxAmount);
+    }, 100);
   };
 
   const calculateAvailableAmount = (formatted = true) => {
-    console.log('maxBorrowValue', maxBorrowValue);
     if (!selectedAsset || !maxBorrowValue) return "0";
     
     if (selectedAsset.symbol === 'TESTSUI') {
