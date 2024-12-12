@@ -17,4 +17,4 @@ export const LENDING_STORAGE_ID = "0x762bd2659b1818baf2c574d8a95838766e2fc406599
 // SUI Framework
 export const CLOCK_ID = "0x0000000000000000000000000000000000000000000000000000000000000006"
 
-export const API_BASE_URL = "http://localhost:3000/api";
+export const API_BASE_URL = "https://pumplend.app/api";

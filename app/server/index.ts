@@ -7,10 +7,15 @@ const app = express();
 const port = 3000;
 
 app.use(cors({
-  origin: '*',
+  origin: ['http://localhost:5173', 'https://pumplend.app'],
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range']
 }));
+
+app.options('*', cors());
+
 app.use(express.json());
 
 app.post('/api/compile-token', async (req, res) => {
