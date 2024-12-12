@@ -1,0 +1,12 @@
+.health-factor-card .risk-details-button,
+.health-factor-card .notifi-button {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: white;
+  border-radius: 20px;
+  padding: 8px 16px;
+}
+
+.health-factor-card .risk-details-button:hover,
+.health-factor-card .notifi-button:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}

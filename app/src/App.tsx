@@ -179,6 +179,12 @@ function Navigation() {
             Lending
           </button>
           <button 
+            className={`nav-button ${location.pathname === '/Borrow' ? 'active' : ''}`}
+            onClick={() => navigate("/Borrow")}
+          >
+            Borrow
+          </button>
+          <button 
             className={`nav-button ${location.pathname === '/lendingtest' ? 'active' : ''}`}
             onClick={() => navigate("/lendingtest")}
           >

@@ -65,8 +65,6 @@ export function OverviewCard({ title, value, apy, percentage, isHealthFactor }: 
             ${value.toLocaleString()}
           </Text>
         </Flex>
-
-        {isHealthFactor}
       </Flex>
     </Box>
   );
