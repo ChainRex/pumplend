@@ -20,9 +20,9 @@ export function SuppliedAssetsTable({ assets = [] }: { assets?: Asset[] }) {
         <Flex className="table-header" p="2">
           <Box style={{ width: '30%' }}>Asset</Box>
           <Box style={{ width: '20%' }}>Balance</Box>
-          <Box style={{ width: '20%' }}>APY</Box>
-          <Box style={{ width: '15%' }}>Max LTV</Box>
-          <Box style={{ width: '15%' }}>Actions</Box>
+          <Box style={{ width: '15%' }}>APY</Box>
+          <Box style={{ width: '10%' }}>Max LTV</Box>
+          <Box style={{ width: '25%' }}>Actions</Box>
         </Flex>
         {assets.length > 0 ? (
           assets.map((asset, index) => (
@@ -36,16 +36,16 @@ export function SuppliedAssetsTable({ assets = [] }: { assets?: Asset[] }) {
               <Box style={{ width: '20%' }}>
                 {asset.supplied} ({asset.value}$)
               </Box>
-              <Box style={{ width: '20%' }}>
+              <Box style={{ width: '15%' }}>
                 {asset.apy}%
               </Box>
-              <Box style={{ width: '15%' }}>
+              <Box style={{ width: '10%' }}>
                 {asset.maxLtv}%
               </Box>
-              <Box style={{ width: '15%' }}>
+              <Box style={{ width: '25%' }}>
                 <Flex gap="2">
-                  <Button size="1" className="action-button secondary">Withdraw</Button>
-                  <Button size="1" className="action-button">Supply</Button>
+                  <Button size="1" variant="soft">Withdraw</Button>
+                  <Button size="1">Borrow</Button>
                 </Flex>
               </Box>
             </Flex>

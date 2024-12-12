@@ -186,7 +186,11 @@ export function Borrow() {
         </Box>
 
         {/* 右侧交互区 */}
-        <InteractionPanel handleTabChange={handleTabChange} defaultTab="borrow"/>
+        <InteractionPanel 
+          handleTabChange={handleTabChange} 
+          defaultTab="borrow"
+          healthFactor={mockData.healthFactor}
+        />
       </Flex>
     </Container>
   );

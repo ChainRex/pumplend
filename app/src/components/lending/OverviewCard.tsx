@@ -15,7 +15,7 @@ export function OverviewCard({ title, value, apy, percentage, isHealthFactor }: 
   const isBorrow = title.toLowerCase().includes("borrow");
   const progressColor = isBorrow ? "rgb(255, 112, 112)" : "rgb(13, 195, 164)";
   const apyColor = isBorrow ? "red" : "green";
-  const percentageTextColor = isBorrow ? "rgb(255, 112, 112)" : "white";
+  const percentageTextColor = isBorrow ? "rgb(255, 112, 112)" : "rgb(13, 195, 164)";
 
   return (
     <Box
