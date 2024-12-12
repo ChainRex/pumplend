@@ -2,7 +2,7 @@ import { useQueries } from "@tanstack/react-query";
 import { useSuiClient } from "@mysten/dapp-kit";
 import { Lending } from "./useLendingList";
 import { formatUnits } from '../utils/format';
-import { API_BASE_URL } from '../config';
+import { API_BASE_URL, TESTSUI_PACKAGE_ID } from '../config';
 
 interface LendingPoolFields {
   reserves: string;
@@ -44,15 +44,18 @@ export interface LendingPoolData {
   borrowRate: string;
   supplyRate: string;
   lastUpdateTime: string;
+  totalAvailableReserves:string;
   ltv: number;
+  price: number;
 }
+
 
 export function useLendingData(lendings?: Lending[]) {
   const suiClient = useSuiClient();
 
   const results = useQueries({
     queries: (lendings || []).map((lending) => ({
-      queryKey: ["lending", lending.lendingPoolId],
+      queryKey: ["lendingPool", lending.id],
       queryFn: async () => {
         const poolData = await suiClient.getObject({
           id: lending.lendingPoolId,
@@ -66,6 +69,7 @@ export function useLendingData(lendings?: Lending[]) {
         }
 
         const fields = poolData.data.content.fields as unknown as LendingPoolFields;
+        
         
         const tokenResponse = await fetch(`${API_BASE_URL}/tokens/${lending.type}/pool`);
         const tokenData = await tokenResponse.json();
@@ -81,7 +85,7 @@ export function useLendingData(lendings?: Lending[]) {
         
         const formatRate = (baseRate: number, adjustment: number, isSupply: boolean) => {
           const baseRatePercent = (baseRate / 1e4) * 100;
-          const adjustmentPercent = (adjustment / 1e2) * 100;
+          const adjustmentPercent = (adjustment / 1e4) * 100;
           
           if (isSupply) {
             // 存款利率 = 基础利率 + 加成
@@ -100,6 +104,31 @@ export function useLendingData(lendings?: Lending[]) {
           }
         };
         
+        let price = 0;
+        if (lending.type === `${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`) {
+          price = 1;
+        } else if (tokenData?.poolId) {
+          const cetusPoolData = await suiClient.getObject({
+            id: tokenData.poolId,
+            options: { showContent: true },
+          });
+
+          if (cetusPoolData.data?.content?.dataType === "moveObject") {
+            const poolFields = cetusPoolData.data.content.fields as any;
+            const coinA = poolFields.coin_a;
+            const coinB = poolFields.coin_b;
+            
+            const testSuiType = `${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`;
+            const isTokenCoinA = lending.type.toLowerCase() > testSuiType.toLowerCase();
+
+            if (isTokenCoinA) {
+              price = Number(coinB) / Number(coinA);
+            } else {
+              price = Number(coinA) / Number(coinB);
+            }
+          }
+        }
+        
         return {
           id: lending.id,
           name: lending.name,
@@ -109,7 +138,8 @@ export function useLendingData(lendings?: Lending[]) {
           lendingPoolId: lending.lendingPoolId,
           cetusPoolId: tokenData?.poolId,
           ltv: lending.ltv,
-          reserves: formatUnits(totalAvailableReserves.toString(), lending.decimals),
+          reserves:formatUnits(reserves.toString(), lending.decimals),
+          totalAvailableReserves: formatUnits(totalAvailableReserves.toString(), lending.decimals),
           donationReserves: formatUnits(fields.donation_reserves || "0", lending.decimals),
           totalDonations: formatUnits(fields.total_donations || "0", lending.decimals),
           donationsLentOut: formatUnits(fields.donations_lent_out || "0", lending.decimals),
@@ -129,9 +159,14 @@ export function useLendingData(lendings?: Lending[]) {
             true
           ),
           lastUpdateTime: new Date(Number(fields.last_update_time)).toLocaleString(),
+          price,
         } as LendingPoolData;
       },
       enabled: !!lending.lendingPoolId,
+      refetchInterval: 3000,
+      refetchIntervalInBackground: false,
+      staleTime: 2000,
+      cacheTime: 5000,
     })),
   });
 

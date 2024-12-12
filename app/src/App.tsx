@@ -6,7 +6,7 @@ import { Trade } from "./Trade";
 import { Box, Flex, Text } from "@radix-ui/themes";
 import { Transaction } from "@mysten/sui/transactions";
 import { PlusCircledIcon } from "@radix-ui/react-icons";
-import { TESTSUI_TREASURECAP_ID,TESTSUI_PACKAGE_ID, PUMPSUI_CORE_PACKAGE_ID, LENDING_STORAGE_ID, CLOCK_ID, TESTSUI_ICON_URL, TESTSUI_METADATA_ID, API_BASE_URL } from "./config";
+import { TESTSUI_TREASURECAP_ID,TESTSUI_PACKAGE_ID, PUMPLEND_CORE_PACKAGE_ID, LENDING_STORAGE_ID, CLOCK_ID, TESTSUI_ICON_URL, TESTSUI_METADATA_ID, API_BASE_URL } from "./config";
 import { useToast } from './hooks/useToast';
 import { LendingTest } from "./LendingTest";
 import { Lending } from "./Lending";
@@ -77,7 +77,7 @@ function Navigation() {
     try {
       const tx = new Transaction();
       tx.moveCall({
-        target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::add_testsui_asset`,
+        target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::add_testsui_asset`,
         arguments: [
           tx.object(LENDING_STORAGE_ID),
           tx.object(CLOCK_ID),
@@ -170,19 +170,13 @@ function Navigation() {
   return (
     <Flex justify="between" align="center" mb="6">
       <Flex gap="6" align="center">
-        <Text size="5" weight="bold">PumpSui</Text>
+        <Text size="5" weight="bold">PumpLend</Text>
         <Flex gap="4">
           <button 
             className={`nav-button ${location.pathname === '/lending' ? 'active' : ''}`}
             onClick={() => navigate("/lending")}
           >
             Lending
-          </button>
-          <button 
-            className={`nav-button ${location.pathname === '/lendingtest' ? 'active' : ''}`}
-            onClick={() => navigate("/lendingtest")}
-          >
-            Lending Test
           </button>
           <button 
             className={`nav-button ${location.pathname === '/trade' ? 'active' : ''}`}

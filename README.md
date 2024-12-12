@@ -1,6 +1,6 @@
-# PumpSui
+# PumpLend
 
-PumpSui 是一个 Meme 代币发行和借贷平台，部署在 Sui 区块链上。它的独特之处在于允许用户利用代币的初始流动性进行借贷操作，为 Meme 生态带来全新的可能性。
+PumpLend 是一个 Meme 代币发行和借贷平台，部署在 Sui 区块链上。它的独特之处在于允许用户利用代币的初始流动性进行借贷操作，为 Meme 生态带来全新的可能性。
 
 <!-- PROJECT SHIELDS -->
 
@@ -14,15 +14,15 @@ PumpSui 是一个 Meme 代币发行和借贷平台，部署在 Sui 区块链上�
 <br />
 
 <p align="center">
-  <h3 align="center">PumpSui</h3>
+  <h3 align="center">PumpLend</h3>
   <p align="center">
     一个 Meme 代币发行和借贷平台
     <br />
-    <a href="http://pumpsui.org">查看Demo</a>
+    <a href="http://pumplend.org">查看Demo</a>
     ·
-    <a href="https://github.com/ChainRex/pumpsui/issues">报告Bug</a>
+    <a href="https://github.com/ChainRex/pumplend/issues">报告Bug</a>
     ·
-    <a href="https://github.com/ChainRex/pumpsui/issues">提出新特性</a>
+    <a href="https://github.com/ChainRex/pumplend/issues">提出新特性</a>
   </p>
 </p>
 
@@ -31,7 +31,7 @@ PumpSui 是一个 Meme 代币发行和借贷平台，部署在 Sui 区块链上�
 - [上手指南](#上手指南)
   - [开发前的配置要求](#开发前的配置要求)
   - [安装步骤](#安装步骤)
-- [PumpSui 工作原理](#pumpsui-工作原理)
+- [PumpLend 工作原理](#pumplend-工作原理)
   - [代币发行](#代币发行)
   - [代币募资](#代币募资)
     - [什么是 Bonding Curve](#什么是-bonding-curve)
@@ -103,7 +103,7 @@ filetree
 
 ### 开发的架构
 
-请阅读[ARCHITECTURE.md](https://github.com/ChainRex/pumpsui/blob/master/ARCHITECTURE.md) 查阅为该项目的架构。
+请阅读[ARCHITECTURE.md](https://github.com/ChainRex/pumplend/blob/master/ARCHITECTURE.md) 查阅为该项目的架构。
 
 ### 部署
 
@@ -115,7 +115,7 @@ filetree
 - [xxxxxxx](https://jquery.com)
 - [xxxxxxx](https://laravel.com) -->
 
-### PumpSui 工作原理
+### PumpLend 工作原理
 
 #### 代币发行
 
@@ -166,7 +166,7 @@ Bonding Curve 是一条描述代币价格与代币供应量关系的函数曲线
 <img src="https://latex.codecogs.com/svg.latex?\begin{align}\Delta%20y%20&=%20\frac{a%20\cdot%20\left(e^{b%20\cdot%20x_1}%20-%20e^{b%20\cdot%20(x_1-\Delta%20x)}\right)}{b}\\\frac{b%20\cdot%20\Delta%20y}{a}%20&=%20e^{b%20\cdot%20x_1}%20-%20e^{b%20\cdot%20(x_1-\Delta%20x)}\\e^{b%20\cdot%20(x_1-\Delta%20x)}%20&=%20e^{b%20\cdot%20x_1}%20-%20\frac{b%20\cdot%20\Delta%20y}{a}\\b%20\cdot%20(x_1-\Delta%20x)%20&=%20\ln\left(e^{b%20\cdot%20x_1}%20-%20\frac{b%20\cdot%20\Delta%20y}{a}\right)\\\Delta%20x%20&=%20x_1%20-%20\frac{1}{b}%20\cdot%20\ln\left(e^{b%20\cdot%20x_1}%20-%20\frac{b%20\cdot%20\Delta%20y}{a}\right)\end{align}" />
 </div>
 
-由于 Move 不支持浮点数运算，需要使用定点数来处理小数。具体实现见[bonding_curve.move](contracts/pumpsui/sources/bonding_curve.move)。
+由于 Move 不支持浮点数运算，需要使用定点数来处理小数。具体实现见[bonding_curve.move](contracts/pumplend/sources/bonding_curve.move)。
 
 #### 创建 CETUS 流动性池
 
@@ -174,7 +174,7 @@ Bonding Curve 是一条描述代币价格与代币供应量关系的函数曲线
 
 #### 代币借贷
 
-PumpSui 采用创新的借贷机制，利用代币的初始流动性来支持借贷操作。在添加 Cetus 流动性前，将初始流动性的 10%(2,000 SUI 和 20,000,000 Token)存入借贷池中。具体方案见[Lending.md](Lending.md)
+当代币达到募资价格后，为了吸引用户购买代币，PumpLend 将会从初始流动性中抽取 3% 的代币(600 SUI 和 6,000,000 Token) 捐赠给自带的借贷池中。这一部分资金用来提升存款利率，较高的存款利率会吸引用户购买代币并存入借贷池中，将有利于代币价格的提升。当代币价格达到 0.0125 SUI/Token 时，将开放代币作为抵押品，从而释放代币的流动性，并允许借出代币，如此时捐赠的资金还有剩余，也将用于借款利率的折扣。具体方案见[Lending.md](Lending.md)
 
 ### 贡献者
 
@@ -202,7 +202,7 @@ _您也可以在贡献者名单中参看所有参与该项目的开发者。_
 
 ### 版权说明
 
-该项目签署了 MIT 授权许可，详情请参阅 [LICENSE](https://github.com/ChainRex/pumpsui/blob/master/LICENSE)
+该项目签署了 MIT 授权许可，详情请参阅 [LICENSE](https://github.com/ChainRex/pumplend/blob/master/LICENSE)
 
 ### 鸣谢
 
@@ -212,14 +212,14 @@ _您也可以在贡献者名单中参看所有参与该项目的开发者。_
 - [Tamago Labs](https://github.com/tamago-labs)
 <!-- links -->
 
-[your-project-path]: ChainRex/pumpsui
-[contributors-shield]: https://img.shields.io/github/contributors/ChainRex/pumpsui.svg?style=flat-square
-[contributors-url]: https://github.com/ChainRex/pumpsui/contributors
-[forks-shield]: https://img.shields.io/github/forks/ChainRex/pumpsui.svg?style=flat-square
-[forks-url]: https://github.com/ChainRex/pumpsui/network/members
-[stars-shield]: https://img.shields.io/github/stars/ChainRex/pumpsui.svg?style=flat-square
-[stars-url]: https://github.com/ChainRex/pumpsui/stargazers
-[issues-shield]: https://img.shields.io/github/issues/ChainRex/pumpsui.svg?style=flat-square
-[issues-url]: https://img.shields.io/github/issues/ChainRex/pumpsui.svg
-[license-shield]: https://img.shields.io/github/license/ChainRex/pumpsui.svg?style=flat-square
-[license-url]: https://github.com/ChainRex/pumpsui/blob/master/LICENSE
+[your-project-path]: ChainRex/pumplend
+[contributors-shield]: https://img.shields.io/github/contributors/ChainRex/pumplend.svg?style=flat-square
+[contributors-url]: https://github.com/ChainRex/pumplend/contributors
+[forks-shield]: https://img.shields.io/github/forks/ChainRex/pumplend.svg?style=flat-square
+[forks-url]: https://github.com/ChainRex/pumplend/network/members
+[stars-shield]: https://img.shields.io/github/stars/ChainRex/pumplend.svg?style=flat-square
+[stars-url]: https://github.com/ChainRex/pumplend/stargazers
+[issues-shield]: https://img.shields.io/github/issues/ChainRex/pumplend.svg?style=flat-square
+[issues-url]: https://img.shields.io/github/issues/ChainRex/pumplend.svg
+[license-shield]: https://img.shields.io/github/license/ChainRex/pumplend.svg?style=flat-square
+[license-url]: https://github.com/ChainRex/pumplend/blob/master/LICENSE

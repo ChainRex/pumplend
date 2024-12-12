@@ -1,12 +1,16 @@
 import { Box, Button, Container, Flex, Text } from "@radix-ui/themes";
 import * as Form from "@radix-ui/react-form";
-import { useCurrentAccount, useSuiClient, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
+import {
+  useCurrentAccount,
+  useSuiClient,
+  useSignAndExecuteTransaction,
+} from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
 import { useState } from "react";
 import ClipLoader from "react-spinners/ClipLoader";
-import { PUMPSUI_CORE_PACKAGE_ID, API_BASE_URL } from "./config";
-import { Toast } from './components/Toast';
-import { useToast } from './hooks/useToast';
+import { PUMPLEND_CORE_PACKAGE_ID, API_BASE_URL } from "./config";
+import { Toast } from "./components/Toast";
+import { useToast } from "./hooks/useToast";
 
 export function TokenMint() {
   const currentAccount = useCurrentAccount();
@@ -42,20 +46,20 @@ export function TokenMint() {
 
       // 调用后端API编译合约
       const response = await fetch(`${API_BASE_URL}/compile-token`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           name: trimmedName,
           symbol: trimmedSymbol,
           description: trimmedDescription,
-          logoUrl: trimmedLogo
-        })
+          logoUrl: trimmedLogo,
+        }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to compile token contract');
+        throw new Error("Failed to compile token contract");
       }
 
       const { bytecode, dependencies } = await response.json();
@@ -64,11 +68,11 @@ export function TokenMint() {
       // 创建新的交易块
       const tx = new Transaction();
       tx.setSender(currentAccount.address);
-      
+
       // 添加发布模块的交易
       const [upgradeCap] = tx.publish({
         modules: [bytecode],
-        dependencies
+        dependencies,
       });
 
       tx.transferObjects([upgradeCap], currentAccount.address);
@@ -86,7 +90,7 @@ export function TokenMint() {
             await suiClient.waitForTransaction({
               digest: result.digest,
             });
-            
+
             // 获取交易详情
             const txDetails = await suiClient.getTransactionBlock({
               digest: result.digest,
@@ -100,32 +104,32 @@ export function TokenMint() {
 
             // 查找 TreasuryCap 对象
             const createdObjects = txDetails.objectChanges?.filter(
-              (change) => change.type === "created"
+              (change) => change.type === "created",
             );
-            const treasuryCapObject = createdObjects?.find(
-              (obj) => obj.objectType.includes("::TreasuryCap<")
+            const treasuryCapObject = createdObjects?.find((obj) =>
+              obj.objectType.includes("::TreasuryCap<"),
             );
-            
+
             // 获取模块 ID
             const publishedModule = txDetails.objectChanges?.find(
-              (change) => change.type === "published"
+              (change) => change.type === "published",
             );
 
             // 查找 Metadata 对象
-            const metadataObject = createdObjects?.find(
-              (obj) => obj.objectType.includes("::CoinMetadata<")
+            const metadataObject = createdObjects?.find((obj) =>
+              obj.objectType.includes("::CoinMetadata<"),
             );
 
             if (publishedModule && treasuryCapObject && metadataObject) {
               const moduleId = publishedModule.packageId;
               const tokenType = `${moduleId}::${tokenSymbol.toLowerCase()}::${tokenSymbol.toUpperCase()}`;
-              
+
               showToast("Creating pool...", "info");
               // 使用 TreasuryCap 创建交易池
               await createPool(
-                tokenType, 
+                tokenType,
                 treasuryCapObject.objectId,
-                metadataObject.objectId
+                metadataObject.objectId,
               );
             } else {
               throw new Error("Failed to get token information");
@@ -137,7 +141,6 @@ export function TokenMint() {
           },
         },
       );
-
     } catch (error) {
       if (error instanceof Error) {
         showToast(error.message, "error");
@@ -149,17 +152,17 @@ export function TokenMint() {
   };
 
   const createPool = async (
-    coinType: string, 
+    coinType: string,
     treasuryCapId: string,
-    metadataId: string
+    metadataId: string,
   ) => {
     try {
       if (!currentAccount) return;
 
       const tx = new Transaction();
-      
+
       tx.moveCall({
-        target: `${PUMPSUI_CORE_PACKAGE_ID}::pumpsui_core::create_collateral`,
+        target: `${PUMPLEND_CORE_PACKAGE_ID}::pump_core::create_collateral`,
         typeArguments: [coinType],
         arguments: [tx.object(treasuryCapId)],
       });
@@ -173,7 +176,7 @@ export function TokenMint() {
             await suiClient.waitForTransaction({
               digest: result.digest,
             });
-            
+
             // 获取交易详情
             const txDetails = await suiClient.getTransactionBlock({
               digest: result.digest,
@@ -187,23 +190,23 @@ export function TokenMint() {
 
             // 查找 Collateral 和 TreasuryCapHolder 对象
             const createdObjects = txDetails.objectChanges?.filter(
-              (change) => change.type === "created"
+              (change) => change.type === "created",
             );
 
-            const collateralObject = createdObjects?.find(
-              (obj) => obj.objectType.includes("::Collateral<")
+            const collateralObject = createdObjects?.find((obj) =>
+              obj.objectType.includes("::Collateral<"),
             );
 
-            const treasuryCapHolderObject = createdObjects?.find(
-              (obj) => obj.objectType.includes("::TreasuryCapHolder<")
+            const treasuryCapHolderObject = createdObjects?.find((obj) =>
+              obj.objectType.includes("::TreasuryCapHolder<"),
             );
 
             if (collateralObject && treasuryCapHolderObject) {
               // 更新代币信息
               await fetch(`${API_BASE_URL}/tokens`, {
-                method: 'POST',
+                method: "POST",
                 headers: {
-                  'Content-Type': 'application/json',
+                  "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
                   name: tokenName,
@@ -215,8 +218,8 @@ export function TokenMint() {
                   metadataId: metadataId,
                   totalSupply: "0",
                   collectedSui: "0",
-                  status: "FUNDING"
-                })
+                  status: "FUNDING",
+                }),
               });
 
               // 显示成功消息，使用 tokenUrl 而不是 txHash
@@ -224,7 +227,7 @@ export function TokenMint() {
                 `Token ${tokenSymbol} created successfully`,
                 "success",
                 undefined,
-                `https://suiscan.xyz/testnet/coin/${coinType}`
+                `https://suiscan.xyz/testnet/coin/${coinType}`,
               );
 
               // 清空表单
@@ -263,13 +266,11 @@ export function TokenMint() {
     const trimmedSymbol = tokenSymbol.trim();
     const trimmedLogo = tokenLogo.trim();
     const trimmedDescription = description.trim();
-    
+
     // 检查所有字段是否都已填写
-    const allFieldsFilled = trimmedName && 
-      trimmedSymbol && 
-      trimmedLogo && 
-      trimmedDescription;
-    
+    const allFieldsFilled =
+      trimmedName && trimmedSymbol && trimmedLogo && trimmedDescription;
+
     if (!currentAccount) {
       // 如果未连接钱包，只有在所有字段都填写后才可点击
       return !allFieldsFilled;
@@ -281,7 +282,7 @@ export function TokenMint() {
   const handleButtonClick = () => {
     if (!currentAccount) {
       // 如果未连接钱包，触发钱包连接
-      document.querySelector<HTMLButtonElement>('.wallet-button')?.click();
+      document.querySelector<HTMLButtonElement>(".wallet-button")?.click();
       return;
     }
     handleMintToken();
@@ -296,14 +297,16 @@ export function TokenMint() {
           </Text>
         </Box>
 
-        <Form.Root onSubmit={(e) => {
-          e.preventDefault();
-          handleButtonClick();
-        }}>
+        <Form.Root
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleButtonClick();
+          }}
+        >
           <Flex direction="column" gap="4">
             <Form.Field name="tokenName">
               <Form.Control asChild>
-                <input 
+                <input
                   className="text-field"
                   placeholder="Token Name"
                   value={tokenName}
@@ -315,7 +318,7 @@ export function TokenMint() {
 
             <Form.Field name="tokenSymbol">
               <Form.Control asChild>
-                <input 
+                <input
                   className="text-field"
                   placeholder="Token Symbol"
                   value={tokenSymbol}
@@ -327,7 +330,7 @@ export function TokenMint() {
 
             <Form.Field name="tokenLogo">
               <Form.Control asChild>
-                <input 
+                <input
                   className="text-field"
                   placeholder="Token Logo URL"
                   value={tokenLogo}
@@ -339,7 +342,7 @@ export function TokenMint() {
 
             <Form.Field name="description">
               <Form.Control asChild>
-                <input 
+                <input
                   className="text-field"
                   placeholder="Token Description"
                   value={description}
@@ -349,8 +352,8 @@ export function TokenMint() {
               </Form.Control>
             </Form.Field>
 
-            <Button 
-              size="3" 
+            <Button
+              size="3"
               className="swap-button"
               type="submit"
               disabled={isButtonDisabled()}
@@ -361,7 +364,7 @@ export function TokenMint() {
         </Form.Root>
 
         {/* 渲染 Toasts */}
-        {toasts.map(toast => (
+        {toasts.map((toast) => (
           <Toast
             key={toast.id}
             message={toast.message}
@@ -369,10 +372,10 @@ export function TokenMint() {
             onClose={() => hideToast(toast.id)}
             txHash={toast.txHash}
             tokenUrl={toast.tokenUrl}
-            duration={toast.type === 'success' ? 6000 : 3000}
+            duration={toast.type === "success" ? 6000 : 3000}
           />
         ))}
       </Flex>
     </Container>
   );
-} 
+}

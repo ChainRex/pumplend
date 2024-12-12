@@ -1,25 +1,16 @@
-module pumpsui::lending_core {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
+module pumplend::lending_core {
     use sui::table::{Self, Table};
     use sui::coin::{Self, Coin};
     use sui::balance::{Self, Balance};
     use sui::clock::Clock;
     use sui::event;
-    use cetus_clmm::pool::{Self, Pool as CetusPool};
-    use std::vector;
+    use cetus_clmm::pool::{Pool as CetusPool};
     use testsui::testsui::{ TESTSUI };
-    use std::string::String;
     use std::type_name::{Self, TypeName};
     use sui::clock;
-    use legato_math::fixed_point64::{Self, FixedPoint64};
-    use legato_math::math_fixed64;
 
-// 当借出meme币的时候，降低最大可借出价值,并且计算最大可借出价值的时候，meme币的价值占比提升
 
     // === 错误码 ===
-    const ENotImplement: u64 = 0;
     const EInsufficientBalance: u64 = 1001;
     const EInsufficientPoolBalance: u64 = 1002;
     const EExceedBorrowLimit: u64 = 1003;
@@ -30,6 +21,9 @@ module pumpsui::lending_core {
     // LTV
     const SUI_LTV: u64 = 60; // 60%
     const TOKEN_LTV: u64 = 20; // 20%
+
+    // Token 债务乘数(用于降低杠杆)
+    const TOKEN_DEBT_MULTIPLIER: u128 = 3; // 3倍
 
     // 清算阈值
     const SUI_LIQUIDATION_THRESHOLD: u64 = 85; // 85%
@@ -42,10 +36,10 @@ module pumpsui::lending_core {
     const LIQUIDATION_DISCOUNT: u64 = 20; // 20% 折扣
 
     // 借款利率折扣
-    const BORROW_INTEREST_RATE_DISCOUNT_INITIAL: u128 = 25; // 25%
+    const BORROW_INTEREST_RATE_DISCOUNT_INITIAL: u128 = 2500; // 25%
 
     // 存款利率加成
-    const SUPPLY_INTEREST_RATE_BONUS_INITIAL: u128 = 25; // 25%
+    const SUPPLY_INTEREST_RATE_BONUS_INITIAL: u128 = 2500; // 25%
 
     const DECIMAL: u128 = 1_000_000_000;
 
@@ -187,6 +181,11 @@ module pumpsui::lending_core {
         supply_value: u128
     }
 
+    public struct CalculateRemainingBorrowValueEvent has copy, drop {
+        user: address,
+        remaining_borrow_value: u128
+    }
+
     public struct AddAssetEvent has copy, drop {
         type_name: TypeName,
         ltv: u64,
@@ -197,6 +196,8 @@ module pumpsui::lending_core {
         type_name: TypeName,
         amount: u64
     }
+
+
 
     // === init ===
 
@@ -785,12 +786,7 @@ module pumpsui::lending_core {
 
         // 计算当前已借金额
         let user_position = table::borrow(&storage.user_positions, user);
-        let mut current_borrows: u128 = 0;
-        if (table::contains(&user_position.borrows, coin_type)) {
-            current_borrows = (
-                *table::borrow(&user_position.borrows, coin_type) as u128
-            ) * DECIMAL;
-        };
+        let current_borrows = calculate_user_total_borrow_value_with_additional_weight(user_position, storage);
 
         assert!(
             current_borrows + borrow_value <= max_borrow_value,
@@ -884,7 +880,6 @@ module pumpsui::lending_core {
         );
 
         // 检查还款金额
-        let borrow_amount = *table::borrow(&user_position.borrows, coin_type);
         let repay_amount = coin::value(repay_coin);
         assert!(
             repay_amount >= amount,
@@ -1363,15 +1358,10 @@ module pumpsui::lending_core {
 
         // 计算当前已借金额
         let user_position = table::borrow(&storage.user_positions, user);
-        let mut current_borrows: u128 = 0;
-        if (table::contains(&user_position.borrows, coin_type)) {
-            current_borrows = (
-                *table::borrow(&user_position.borrows, coin_type) as u128
-            ) * token_price / DECIMAL;
-        };
+        let current_borrows = calculate_user_total_borrow_value_with_additional_weight(user_position, storage);
 
         assert!(
-            current_borrows + borrow_value <= max_borrow_value,
+            current_borrows + borrow_value * TOKEN_DEBT_MULTIPLIER <= max_borrow_value,
             EExceedBorrowLimit
         );
 
@@ -1479,15 +1469,10 @@ module pumpsui::lending_core {
 
         // 计算当前已借金额
         let user_position = table::borrow(&storage.user_positions, user);
-        let mut current_borrows: u128 = 0;
-        if (table::contains(&user_position.borrows, coin_type)) {
-            current_borrows = (
-                *table::borrow(&user_position.borrows, coin_type) as u128
-            ) * token_price / DECIMAL;
-        };
+        let current_borrows = calculate_user_total_borrow_value_with_additional_weight(user_position, storage);
 
         assert!(
-            current_borrows + borrow_value <= max_borrow_value,
+            current_borrows + borrow_value * TOKEN_DEBT_MULTIPLIER <= max_borrow_value,
             EExceedBorrowLimit
         );
 
@@ -1582,7 +1567,6 @@ module pumpsui::lending_core {
         );
 
         // 检查还款金额
-        let borrow_amount = *table::borrow(&user_position.borrows, coin_type);
         let repay_amount = coin::value(repay_coin);
         assert!(
             repay_amount >= amount,
@@ -1673,7 +1657,6 @@ module pumpsui::lending_core {
         );
 
         // 检查还款金额
-        let borrow_amount = *table::borrow(&user_position.borrows, coin_type);
         let repay_amount = coin::value(repay_coin);
         assert!(
             repay_amount >= amount,
@@ -2094,7 +2077,10 @@ module pumpsui::lending_core {
                     asset_info.type_name
                 );
 
-                if (asset_info.type_name != type_name::get<TESTSUI>() && price < MIN_BORROW_PRICE) continue;
+                if (asset_info.type_name != type_name::get<TESTSUI>() && price < MIN_BORROW_PRICE){
+                    i = i + 1;
+                    continue
+                };
                 // 将抵押物价值转换为 SUI (使用清算阈值)
                 let value_in_threshold = (
                     (supply_amount as u128) * price * (
@@ -2133,6 +2119,12 @@ module pumpsui::lending_core {
 
         // 如果没有借款,返回最大健康因子
         if (total_borrows_in_sui == 0) {
+            event::emit(
+            CalculateHealthFactorEvent {
+                user,
+                health_factor: 1000000
+            }
+        );
             return 1000000
         };
         event::emit(
@@ -2179,11 +2171,14 @@ module pumpsui::lending_core {
                     asset_info.type_name
                 );
 
-                if (asset_info.type_name != type_name::get<TESTSUI>() && price < MIN_BORROW_PRICE) continue;
+                if (asset_info.type_name != type_name::get<TESTSUI>() && price < MIN_BORROW_PRICE){
+                    i = i + 1;
+                    continue
+                };
                 // 将抵押物价值转换为 SUI (使用 LTV)
                 let value_in_ltv = (
                     (supply_amount as u128) * price * (asset_info.ltv as u128)
-                ) / 100;
+                ) / 100 ;
                 total_collateral_in_ltv = total_collateral_in_ltv + value_in_ltv;
             };
             i = i + 1;
@@ -2197,6 +2192,35 @@ module pumpsui::lending_core {
         total_collateral_in_ltv
     }
 
+    // 计算剩余可借款价值的函数
+    public entry fun calculate_remaining_borrow_value(
+        storage: &LendingStorage,
+        user: address
+    ): u128 {
+        // 检查用户是否有仓位
+        if (!table::contains(&storage.user_positions, user)) {
+            return 0
+        };
+
+        let user_position = table::borrow(&storage.user_positions, user);
+        let max_borrow_value = calculate_max_borrow_value(storage, user);
+        let total_borrow_value = calculate_user_total_borrow_value_with_additional_weight(user_position, storage);
+        let remaining_value = if (max_borrow_value < total_borrow_value) {
+            0
+        } else {
+            max_borrow_value - total_borrow_value
+        };
+        event::emit(
+            CalculateRemainingBorrowValueEvent {
+                user,
+                remaining_borrow_value: remaining_value
+            }
+        );
+        remaining_value
+    }
+
+    
+
     
 
     // === 内部函数 ===
@@ -2209,11 +2233,9 @@ module pumpsui::lending_core {
         // 当存款为0但借款不为0时,返回最高利率
         if (total_supplies == 0 && total_borrows > 0) {
             let max_rate = R_BASE + R_SLOPE1 + R_SLOPE2; // 最高利率 = 基础利率 + 第一阶段斜率 + 第二阶段斜率
-            if (max_rate > pool.borrow_interest_rate_discount) {
-                (max_rate, max_rate - pool.borrow_interest_rate_discount)
-            } else {
-                (max_rate, 0)
-            }
+
+            let discount = (pool.borrow_interest_rate_discount * 100) / 10000;
+            (max_rate, max_rate - discount)
         } else if (total_supplies == 0 || total_borrows == 0) {
             // 当存款和借款都为0,或只有存款没有借款时,返回基础利率
             (R_BASE, 0)
@@ -2244,7 +2266,8 @@ module pumpsui::lending_core {
 
             // 应用借款利率折扣(确保不会低于0)
             if (base_borrow_rate > pool.borrow_interest_rate_discount) {
-                (base_borrow_rate, base_borrow_rate - pool.borrow_interest_rate_discount)
+                let discount = (pool.borrow_interest_rate_discount * 100) / 10000;
+                (base_borrow_rate, base_borrow_rate - discount)
             } else {
                 (base_borrow_rate, 0)
             }
@@ -2253,14 +2276,11 @@ module pumpsui::lending_core {
 
     // 修改计算存款利率的函数,加入额外利率加成
     fun compute_supply_rate<CoinType>(pool: &LendingPool<CoinType>) : (u128,u128) {
-        // 计算基础借款利率
         let (borrow_rate,_) = compute_borrow_rate(pool);
-        
-        // 计算基础存款利率 = 借款利率 * (1 - 储备金率)
         let base_supply_rate = ((borrow_rate * (10000 - RESERVE_FACTOR * 100)) / 10000);
-
-        // 加上额外利率加成
-        (base_supply_rate,base_supply_rate + pool.extra_supply_interest_rate_bonus)
+        // 将存款利率加成转换为正确的精度
+        let bonus = (pool.extra_supply_interest_rate_bonus * 100) / 10000;
+        (base_supply_rate, base_supply_rate + bonus)
     }
 
     // 利息因子计算函数
@@ -2294,12 +2314,12 @@ module pumpsui::lending_core {
         // 计算存款利率加成需要的补贴
         let supply_bonus_needed = (
             total_supplies * pool.extra_supply_interest_rate_bonus * (time_delta as u128)
-        ) / (YEAR_MS * 10000);
+        ) / (YEAR_MS * 1000000); // 需要除以 100 * 10000 因为 bonus 现在是 2500 表示 25%
 
         // 计算借款利率折扣需要的补贴
         let borrow_discount_needed = (
             total_borrows * pool.borrow_interest_rate_discount * (time_delta as u128)
-        ) / (YEAR_MS * 10000);
+        ) / (YEAR_MS * 1000000); // 需要除以 100 * 10000 因为 discount 现在是 2500 表示 25%
 
         // 计算本次更新周期需要的总补贴
         let total_subsidy_needed = supply_bonus_needed + borrow_discount_needed;
@@ -2322,11 +2342,22 @@ module pumpsui::lending_core {
             actual_supply_rate = calc_borrow_rate(supply_rate_with_bonus, time_delta);
         };
 
+        // 从捐赠储备金转移补贴到储备金
+        let donation_balance = balance::split(&mut pool.donation_reserves, (total_subsidy_needed as u64));
+        balance::join(&mut pool.reserves, donation_balance);
+
+
         // 更新总借款金额
         let new_total_borrows = (
             total_borrows * (DECIMAL + actual_borrow_rate)
         ) / DECIMAL;
         pool.total_borrows = (new_total_borrows as u64);
+
+        // 更新总存款金额
+        let new_total_supplies = (
+            total_supplies * (DECIMAL + actual_supply_rate)
+        ) / DECIMAL;
+        pool.total_supplies = (new_total_supplies as u64);
 
         // 更新借款累积利率
         let old_borrow_index = pool.borrow_index as u128;
@@ -2344,6 +2375,41 @@ module pumpsui::lending_core {
         
         // 更新最后计息时间
         pool.last_update_time = current_time;
+    }
+
+    // 计算用户总借款价值（增加token权重）
+    fun calculate_user_total_borrow_value_with_additional_weight(
+        user_position: &UserPosition,
+        storage: &LendingStorage
+    ): u128 {
+        // 遍历所有借款
+        let mut i = 0;
+        let assets_len = vector::length(&storage.supported_assets);
+        let mut total_borrow_value = 0;
+        while (i < assets_len) {
+            let asset_info = vector::borrow(&storage.supported_assets, i);
+            if (table::contains(
+                    &user_position.borrows,
+                    asset_info.type_name
+                )) {
+                let borrow_amount = *table::borrow(
+                    &user_position.borrows,
+                    asset_info.type_name
+                );
+                let price = *table::borrow(
+                    &storage.price,
+                    asset_info.type_name
+                );
+                let borrow_value = (borrow_amount as u128) * price;
+                if (asset_info.type_name == type_name::get<TESTSUI>()) {
+                    total_borrow_value = total_borrow_value + borrow_value;
+                } else {
+                    total_borrow_value = total_borrow_value + borrow_value * TOKEN_DEBT_MULTIPLIER;
+                };
+            };
+            i = i + 1;
+        };
+        total_borrow_value
     }
 
     // 计算用户实际借款金额（包含利息）
@@ -2366,6 +2432,8 @@ module pumpsui::lending_core {
         
         (actual_amount as u64)
     }
+
+    
 
     // 计算用户实际存款金额（包含利息）
     fun calculate_user_actual_supply_amount<CoinType>(
@@ -2497,13 +2565,13 @@ module pumpsui::lending_core {
         ) / 10000;
 
         // 如果调整后的利率激励低于最低阈值,则设为0
-        pool.extra_supply_interest_rate_bonus = if (new_supply_bonus * 100 >= MIN_INTEREST_RATE_BONUS) {
+        pool.extra_supply_interest_rate_bonus = if (new_supply_bonus >= MIN_INTEREST_RATE_BONUS) {
             new_supply_bonus
         } else {
             0
         };
 
-        pool.borrow_interest_rate_discount = if (new_borrow_discount * 100 >= MIN_INTEREST_RATE_BONUS) {
+        pool.borrow_interest_rate_discount = if (new_borrow_discount >= MIN_INTEREST_RATE_BONUS) {
             new_borrow_discount
         } else {
             0

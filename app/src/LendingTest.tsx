@@ -3,7 +3,7 @@ import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@
 import { Transaction } from "@mysten/sui/transactions";
 import { Token, useTokenList } from "./hooks/useTokenList";
 import { 
-  PUMPSUI_CORE_PACKAGE_ID, 
+  PUMPLEND_CORE_PACKAGE_ID, 
   LENDING_STORAGE_ID, 
   CLOCK_ID, 
   TESTSUI_PACKAGE_ID,
@@ -46,6 +46,12 @@ interface AddAssetEvent {
 interface HealthFactorEvent {
   user: string;
   health_factor: string;
+}
+
+// 添加剩余可借款价值事件接口
+interface RemainingBorrowValueEvent {
+  user: string;
+  remaining_borrow_value: string;
 }
 
 export function LendingTest() {
@@ -150,7 +156,7 @@ export function LendingTest() {
         );
 
         tx.moveCall({
-          target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::supply_testsui`,
+          target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::supply_testsui`,
           arguments: [
             tx.object(CLOCK_ID),
             tx.object(LENDING_STORAGE_ID),
@@ -161,7 +167,7 @@ export function LendingTest() {
         });
       } else {
         if (!pool.cetusPoolId) {
-          throw new Error("未找到 CETUS 池���信息");
+          throw new Error("未找到 CETUS 池信息");
         }
 
         // 准备代币支付
@@ -176,7 +182,7 @@ export function LendingTest() {
         const comparison = pool.type.toLowerCase() > testSuiType.toLowerCase();
 
         tx.moveCall({
-          target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::supply_token_${comparison ? 'a' : 'b'}`,
+          target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::supply_token_${comparison ? 'a' : 'b'}`,
           typeArguments: [pool.type],
           arguments: [
             tx.object(CLOCK_ID),
@@ -216,8 +222,7 @@ export function LendingTest() {
 
             // 刷新用户仓位
             if (currentAccount) {
-              await queryUserPosition(currentAccount.address);
-              await queryHealthFactor(currentAccount.address);
+              await queryUserData(currentAccount.address);
             }
           },
           onError: (error: Error) => {
@@ -251,7 +256,7 @@ export function LendingTest() {
 
       if (pool.symbol === 'TESTSUI') {
         tx.moveCall({
-          target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::withdraw_testsui`,
+          target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::withdraw_testsui`,
           arguments: [
             tx.object(CLOCK_ID),
             tx.object(LENDING_STORAGE_ID),
@@ -275,7 +280,7 @@ export function LendingTest() {
         const comparison = pool.type.toLowerCase() > testSuiType.toLowerCase();
 
         tx.moveCall({
-          target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::withdraw_token_${comparison ? 'a' : 'b'}`,
+          target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::withdraw_token_${comparison ? 'a' : 'b'}`,
           typeArguments: [pool.type],
           arguments: [
             tx.object(CLOCK_ID),
@@ -314,8 +319,7 @@ export function LendingTest() {
 
             // 刷新用户仓位
             if (currentAccount) {
-              await queryUserPosition(currentAccount.address);
-              await queryHealthFactor(currentAccount.address);
+              await queryUserData(currentAccount.address);
             }
           },
           onError: (error: Error) => {
@@ -349,7 +353,7 @@ export function LendingTest() {
 
       if (pool.symbol === 'TESTSUI') {
         tx.moveCall({
-          target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::borrow_testsui`,
+          target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::borrow_testsui`,
           arguments: [
             tx.object(CLOCK_ID),
             tx.object(LENDING_STORAGE_ID),
@@ -368,12 +372,12 @@ export function LendingTest() {
           throw new Error("无法获取 CETUS 池子信息");
         }
 
-        // 判���代币顺序
+        // 判断代币顺序
         const testSuiType = `${TESTSUI_PACKAGE_ID}::testsui::TESTSUI`;
         const comparison = pool.type.toLowerCase() > testSuiType.toLowerCase();
 
         tx.moveCall({
-          target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::borrow_token_${comparison ? 'a' : 'b'}`,
+          target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::borrow_token_${comparison ? 'a' : 'b'}`,
           typeArguments: [pool.type],
           arguments: [
             tx.object(CLOCK_ID),
@@ -408,8 +412,7 @@ export function LendingTest() {
 
             // 刷新用户仓位
             if (currentAccount) {
-              await queryUserPosition(currentAccount.address);
-              await queryHealthFactor(currentAccount.address);
+              await queryUserData(currentAccount.address);
             }
           },
           onError: (error: Error) => {
@@ -450,7 +453,7 @@ export function LendingTest() {
         );
 
         tx.moveCall({
-          target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::repay_testsui`,
+          target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::repay_testsui`,
           arguments: [
             tx.object(CLOCK_ID),
             tx.object(LENDING_STORAGE_ID),
@@ -482,7 +485,7 @@ export function LendingTest() {
         const comparison = pool.type.toLowerCase() > testSuiType.toLowerCase();
 
         tx.moveCall({
-          target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::repay_token_${comparison ? 'a' : 'b'}`,
+          target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::repay_token_${comparison ? 'a' : 'b'}`,
           typeArguments: [pool.type],
           arguments: [
             tx.object(CLOCK_ID),
@@ -518,8 +521,7 @@ export function LendingTest() {
 
             // 刷新用户仓位
             if (currentAccount) {
-              await queryUserPosition(currentAccount.address);
-              await queryHealthFactor(currentAccount.address);
+              await queryUserData(currentAccount.address);
             }
           },
           onError: (error: Error) => {
@@ -618,14 +620,14 @@ export function LendingTest() {
               <Button 
                 size="1"
                 onClick={() => handleAction(onBorrow)}
-                disabled={!amount}
+                disabled={!amount || !shouldShowLendingButtons(pool)}
               >
                 借款
               </Button>
               <Button 
                 size="1"
                 onClick={() => handleAction(onRepay)}
-                disabled={!amount}
+                disabled={!amount || !shouldShowLendingButtons(pool)}
               >
                 还款
               </Button>
@@ -639,16 +641,34 @@ export function LendingTest() {
   const [userPosition, setUserPosition] = useState<UserPositionEvent | null>(null);
   const [isLoadingPosition, setIsLoadingPosition] = useState(false);
   const [healthFactor, setHealthFactor] = useState<string | null>(null);
+  const [maxBorrowValue, setMaxBorrowValue] = useState<string | null>(null);
 
-  // 查询用户仓位的函数
-  const queryUserPosition = async (address: string) => {
-    setIsLoadingPosition(true);
-
+  // 添加一个新的函数来处理所有的 dryRun 查询
+  const queryUserData = async (address: string) => {
     try {
+      setIsLoadingPosition(true);
       const tx = new Transaction();
       
       tx.moveCall({
-        target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::get_user_position`,
+        target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::get_user_position`,
+        arguments: [
+          tx.object(LENDING_STORAGE_ID),
+          tx.pure.address(address)
+        ],
+      });
+
+      // 添加查询健康因子的调用
+      tx.moveCall({
+        target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::calculate_health_factor`,
+        arguments: [
+          tx.object(LENDING_STORAGE_ID),
+          tx.pure.address(address)
+        ],
+      });
+
+      // 添加查询剩余可借款价值的调用
+      tx.moveCall({
+        target: `${PUMPLEND_CORE_PACKAGE_ID}::lending_core::calculate_remaining_borrow_value`,
         arguments: [
           tx.object(LENDING_STORAGE_ID),
           tx.pure.address(address)
@@ -661,66 +681,54 @@ export function LendingTest() {
         transactionBlock: await tx.build({ client: suiClient }),
       });
 
+      console.log("dryRunResult:", dryRunResult);
+
+      // 处理用户仓位事件
       const positionEvent = dryRunResult.events?.find(
         event => event.type.includes('::GetUserPositionEvent')
       );
-
-      if (positionEvent && positionEvent.parsedJson) {
+      if (positionEvent?.parsedJson) {
         setUserPosition(positionEvent.parsedJson as UserPositionEvent);
       }
-    } catch (error) {
-      console.error('查询用户仓位失败:', error);
-    } finally {
-      setIsLoadingPosition(false);
-    }
-  };
 
-  // 添加查询健康因子的函数
-  const queryHealthFactor = async (address: string) => {
-    try {
-      const tx = new Transaction();
-      
-      tx.moveCall({
-        target: `${PUMPSUI_CORE_PACKAGE_ID}::lending_core::calculate_health_factor`,
-        arguments: [
-          tx.object(LENDING_STORAGE_ID),
-          tx.pure.address(address)
-        ],
-      });
-
-      tx.setSender(address);
-
-      const dryRunResult = await suiClient.dryRunTransactionBlock({
-        transactionBlock: await tx.build({ client: suiClient }),
-      });
-
+      // 处理健康因子事件
       const healthFactorEvent = dryRunResult.events?.find(
         event => event.type.includes('::CalculateHealthFactorEvent')
       );
-
       if (healthFactorEvent?.parsedJson) {
         const eventData = healthFactorEvent.parsedJson as HealthFactorEvent;
         // 将健康因子转换为百分比格式
         const healthFactorValue = (Number(eventData.health_factor) / 100).toFixed(2);
         setHealthFactor(healthFactorValue);
       }
+
+      // 处理最大可借款价值事件
+      const remainingBorrowEvent = dryRunResult.events?.find(
+        event => event.type.includes('::CalculateRemainingBorrowValueEvent')
+      );
+      if (remainingBorrowEvent?.parsedJson) {
+        const eventData = remainingBorrowEvent.parsedJson as RemainingBorrowValueEvent;
+        const remainingBorrowValueInTestSui = formatUnits(eventData.remaining_borrow_value, 18);
+        setMaxBorrowValue(remainingBorrowValueInTestSui);
+      }
     } catch (error) {
-      console.error('查询健康因子失败:', error);
+      console.error('查询用户数据失败:', error);
+    } finally {
+      setIsLoadingPosition(false);
     }
   };
 
-  // 修改 useEffect，同时查询仓位和健康因子
+  // 修改 useEffect，使用新的查询函数
   useEffect(() => {
     if (currentAccount) {
-      queryUserPosition(currentAccount.address);
-      queryHealthFactor(currentAccount.address);
+      queryUserData(currentAccount.address);
     } else {
       setUserPosition(null);
       setHealthFactor(null);
+      setMaxBorrowValue(null);
     }
   }, [currentAccount]);
 
-  // 修改 UserPositionDisplay 组件
   const UserPositionDisplay = ({ position }: { position: UserPositionEvent }) => {
     const getPoolData = (assetType: string) => {
       const pool = lendingPoolsData.find(pool => {
@@ -747,63 +755,87 @@ export function LendingTest() {
     );
 
     return (
-      <Table.Root variant="surface">
-        <Table.Header>
-          <Table.Row>
-            <Table.ColumnHeaderCell>资产类型</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>存款金额</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>存款利率</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>存款利率快照</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>借款金额</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>借款利率</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>借款利率快照</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>LTV</Table.ColumnHeaderCell>
-          </Table.Row>
-        </Table.Header>
-        <Table.Body>
-          {activeAssets.map(({ asset, supply, borrow, supplySnapshot, borrowSnapshot, index }) => {
-            const assetType = asset.name;
-            const displayName = assetType.split('::').pop() || assetType;
-            const poolData = getPoolData(assetType);
+      <>
+        <Box mb="4">
+          <Flex gap="6">
+            <Flex align="center" gap="2">
+              <Text weight="bold">总存款价值:</Text>
+              <Text>
+                {formatUnits(position.supply_value, 9)} TESTSUI
+              </Text>
+            </Flex>
+            <Flex align="center" gap="2">
+              <Text weight="bold">总借款价值:</Text>
+              <Text>
+                {formatUnits(position.borrow_value, 9)} TESTSUI
+              </Text>
+            </Flex>
+            <Flex align="center" gap="2">
+              <Text weight="bold">剩余可借款价值:</Text>
+              <Text>
+                {maxBorrowValue || "0"} TESTSUI
+              </Text>
+            </Flex>
+          </Flex>
+        </Box>
+        <Table.Root variant="surface">
+          <Table.Header>
+            <Table.Row>
+              <Table.ColumnHeaderCell>资产类型</Table.ColumnHeaderCell>
+              <Table.ColumnHeaderCell>存款金额</Table.ColumnHeaderCell>
+              <Table.ColumnHeaderCell>存款利率</Table.ColumnHeaderCell>
+              <Table.ColumnHeaderCell>存款利率快照</Table.ColumnHeaderCell>
+              <Table.ColumnHeaderCell>借款金额</Table.ColumnHeaderCell>
+              <Table.ColumnHeaderCell>借款利率</Table.ColumnHeaderCell>
+              <Table.ColumnHeaderCell>借款利率快照</Table.ColumnHeaderCell>
+              <Table.ColumnHeaderCell>LTV</Table.ColumnHeaderCell>
+            </Table.Row>
+          </Table.Header>
+          <Table.Body>
+            {activeAssets.map(({ asset, supply, borrow, supplySnapshot, borrowSnapshot, index }) => {
+              const assetType = asset.name;
+              const displayName = assetType.split('::').pop() || assetType;
+              const poolData = getPoolData(assetType);
 
-            return (
-              <Table.Row key={index}>
-                <Table.Cell>{displayName}</Table.Cell>
-                <Table.Cell>
-                  {supply !== "0" ? formatUnits(supply, 9) : '-'}
-                </Table.Cell>
-                <Table.Cell>
-                  {poolData?.supplyRate || '-'}
-                </Table.Cell>
-                <Table.Cell>
-                  {supplySnapshot !== "0" ? supplySnapshot : '-'}
-                </Table.Cell>
-                <Table.Cell>
-                  {borrow !== "0" ? formatUnits(borrow, 9) : '-'}
-                </Table.Cell>
-                <Table.Cell>
-                  {poolData?.borrowRate || '-'}
-                </Table.Cell>
-                <Table.Cell>
-                  {borrowSnapshot !== "0" ? borrowSnapshot : '-'}
-                </Table.Cell>
-                <Table.Cell>
-                  {poolData?.ltv ? `${poolData.ltv}%` : '-'}
+              return (
+                <Table.Row key={index}>
+                  <Table.Cell>{displayName}</Table.Cell>
+                  <Table.Cell>
+                    {supply !== "0" ? formatUnits(supply, 9) : '-'}
+                  </Table.Cell>
+                  <Table.Cell>
+                    {poolData?.supplyRate || '-'}
+                  </Table.Cell>
+                  <Table.Cell>
+                    {supplySnapshot !== "0" ? supplySnapshot : '-'}
+                  </Table.Cell>
+                  <Table.Cell>
+                    {borrow !== "0" ? formatUnits(borrow, 9) : '-'}
+                  </Table.Cell>
+                  <Table.Cell>
+                    {poolData?.borrowRate || '-'}
+                  </Table.Cell>
+                  <Table.Cell>
+                    {borrowSnapshot !== "0" ? borrowSnapshot : '-'}
+                  </Table.Cell>
+                  <Table.Cell>
+                    {poolData?.ltv ? `${poolData.ltv}%` : '-'}
+                  </Table.Cell>
+                </Table.Row>
+              );
+            })}
+            {activeAssets.length === 0 && (
+              <Table.Row>
+                <Table.Cell colSpan={8}>
+                  <Text color="gray" align="center">
+                    暂无仓位数据
+                  </Text>
                 </Table.Cell>
               </Table.Row>
-            );
-          })}
-          {activeAssets.length === 0 && (
-            <Table.Row>
-              <Table.Cell colSpan={8}>
-                <Text color="gray" align="center">
-                  暂无仓位数据
-                </Text>
-              </Table.Cell>
-            </Table.Row>
-          )}
-        </Table.Body>
-      </Table.Root>
+            )}
+          </Table.Body>
+        </Table.Root>
+      </>
     );
   };
 
@@ -843,27 +875,14 @@ export function LendingTest() {
     );
   };
 
-  // 添加总价值显示组件
-  const TotalValueDisplay = ({ position }: { position: UserPositionEvent }) => {
-    return (
-      <Box mb="4">
-        <Flex gap="6">
-          <Flex align="center" gap="2">
-            <Text weight="bold">总存款价值:</Text>
-            <Text>
-              {formatUnits(position.supply_value, 9)} TESTSUI
-            </Text>
-          </Flex>
-          <Flex align="center" gap="2">
-            <Text weight="bold">总借款价值:</Text>
-            <Text>
-              {formatUnits(position.borrow_value, 9)} TESTSUI
-            </Text>
-          </Flex>
-        </Flex>
-      </Box>
-    );
+  // 判断是否显示借贷按钮
+  const shouldShowLendingButtons = (pool: LendingPoolData) => {
+    if (pool.symbol === 'TESTSUI') {
+      return true;
+    }
+    return pool.price >= 0.0125; // 只有价格大于等于0.0125时才显示按钮
   };
+
 
   return (
     <Container>
@@ -904,8 +923,8 @@ export function LendingTest() {
                   currentAccount={currentAccount}
                   onDeposit={handleDeposit}
                   onWithdraw={handleWithdraw}
-                  onBorrow={handleBorrow}
-                  onRepay={handleRepay}
+                  onBorrow={shouldShowLendingButtons(pool) ? handleBorrow : () => {}}
+                  onRepay={shouldShowLendingButtons(pool) ? handleRepay : () => {}}
                 />
               ))}
               {(!lendingPoolsData || lendingPoolsData.length === 0) && (
@@ -935,8 +954,6 @@ export function LendingTest() {
             ) : currentAccount ? (
               userPosition ? (
                 <>
-                  {/* 添加总价值显示 */}
-                  <TotalValueDisplay position={userPosition} />
                   <UserPositionDisplay position={userPosition} />
                 </>
               ) : (
