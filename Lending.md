@@ -1,6 +1,6 @@
 ## 概述
 
-当代币达到募资价格后，将会铸造 200,000,000 代币，与募集到的 20,000 SUI 一起作为初始流动性。为了吸引用户购买代币，PumpLend 将会从初始流动性中抽取 3% 的代币(600 SUI 和 6,000,000 Token) 捐赠给自带的借贷池中。这一部分资金用来提升存款利率，较高的存款利率会吸引用户购买代币并存入借贷池中，将有利于代币价格的提升。当代币价格达到 0.0125 SUI/Token 时，将开放代币作为抵押品，从而释放代币的流动性，并允许借出代币，如此时捐赠的资金还有剩余，也将用于借款利率的折扣。
+当代币达到募资价格后，将会铸造 200,000,000 代币，与募集到的 20,000 SUI 一起作为初始流动性。为了吸引用户购买代币，PumpLend 将会从初始流动性中抽取 3% 的代币(600 SUI 和 6,000,000 Token) 捐赠到借贷池中。这一部分资金用来提升存款利率，较高的存款利率会吸引用户购买代币并存入借贷池中，将有利于代币价格的提升。当代币价格达到 0.0125 SUI/Token 时，将开放代币作为抵押品，从而释放代币的流动性，并允许借出代币，如此时捐赠的资金还有剩余，也将用于借款利率的折扣。
 
 
 ## 价格与价值计算
@@ -53,7 +53,7 @@ V_{borrow}^{max} = \sum_j (V_{C_j} \times LTV_{C_j})
 1. 当代币价格低于 0.0125 SUI/Token 时，不开放借款服务，并且无法作为抵押品
 2. 当代币价格大于 0.0125 SUI/Token 并开放借款后，此时依旧存在代币价格大幅上升的风险，因此在借出非SUI代币时，将按照以下公式计算可借出的代币价值：
    \[
-   \frac{\sum_j (V_{C_j} \times LTV_{C_j}) - (V_{borrow}^{SUI} + TOKEN\_DEBT\_MULTIPLIER \times \sum_k V_{borrow}^{token_k})}{TOKEN\_DEBT\_MULTIPLIER}
+   \frac{\sum_j (V_{C_j} \times LTV_{C_j}) - (V_{borrow}^{SUI} + token\_debt\_multiplier \times \sum_k V_{borrow}^{token_k})}{token\_debt\_multiplier}
    \]
 
 其中:
@@ -61,7 +61,7 @@ V_{borrow}^{max} = \sum_j (V_{C_j} \times LTV_{C_j})
 - \(LTV_{C_j}\) 是抵押物 \(j\) 的抵押率(SUI 为 60%, 新代币为 20%)
 - \(V_{borrow}^{SUI}\) 是借出的 SUI 价值
 - \(V_{borrow}^{token_k}\) 是借出的第 k 种代币的价值(以 SUI 计)
-- \(TOKEN\_DEBT\_MULTIPLIER\) 是非 SUI 代币的债务乘数(定义为3倍)，该系数仅用于降低杠杆率，不对实际的债务价值产生影响，也不影响健康因子的计算
+- \(token\_debt\_multiplier\) 是非 SUI 代币的债务乘数(定义为3倍)，该系数仅用于降低杠杆率，不对实际的债务价值产生影响，也不影响健康因子的计算
 
 
 
@@ -170,9 +170,9 @@ HF = \frac{\sum_j (V_{C_j} \times T_{C_j})}{V_{borrow}^{total}}
 
 
 2. **额外存款奖励利率 (extra_supply_interest_rate_bonus)**：
-   初始时设定一个奖励利率上限 \(SUPPLY\_INTEREST\_RATE\_BONUS\_INITIAL=25\%\) ，再根据当前 \(donation\_ratio\) 比例线性缩放。
+   初始时设定一个奖励利率上限 \(supply\_interest\_rate\_bonus\_initial\) ，再根据当前 \(donation\_ratio\) 比例线性缩放。
    \[
-   new\_supply\_bonus = {SUPPLY\_INTEREST\_RATE\_BONUS\_INITIAL(25\%) \times donation\_ratio}
+   new\_supply\_bonus = {supply\_interest\_rate\_bonus\_initial \times donation\_ratio}
    \]
 
    若计算结果低于最低门槛0.5%，则奖励直接归零。
@@ -180,7 +180,7 @@ HF = \frac{\sum_j (V_{C_j} \times T_{C_j})}{V_{borrow}^{total}}
 3. **借款利率折扣 (borrow_interest_rate_discount)**：
    与额外存款奖励类似，对借款利率折扣以相同的方式缩放：
    \[
-   new\_borrow\_discount = {BORROW\_INTEREST\_RATE\_DISCOUNT\_INITIAL(25\%) \times donation\_ratio}
+   new\_borrow\_discount = {borrow\_interest\_rate\_discount\_initial \times donation\_ratio}
    \]
 
    同样的，若计算结果低于最低门槛0.5%，则折扣设为0。
