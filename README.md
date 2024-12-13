@@ -236,7 +236,8 @@ $$
 - **SUI 抵押率 (LTV_SUI)**：60%
 - **新代币抵押率 (LTV_token)**：20%
 
-**最大可借款价值**（以 SUI 计）：  
+**最大可借款价值**（以 SUI 计）:
+
 $$
 V_{borrow}^{max} = \sum_j (V_{C_j} \times LTV_{C_j})
 $$
@@ -323,17 +324,18 @@ $$
 
 2. **分段利率模型**：
    - 设定最优利用率 $U_{optimal} = 50\%$
-   - 当 $U \leq U_{optimal}$ 时，利率线性增长：
-
-     $$
-     R_{borrow} = \frac{R_{slope1} \times U}{U_{optimal}}
-     $$
+   - 当 $U \leq U_{optimal}$ 时，利率线性增长： 
+  
+$$
+R_{borrow} = \frac{R_{slope1} \times U}{U_{optimal}}
+$$
 
    - 当 $U > U_{optimal}$ 时，利率加速增长：
-
-     $$
-     R_{borrow} = R_{slope1} + \frac{R_{slope2} \times (U - U_{optimal})}{1 - U_{optimal}}
-     $$
+  
+      
+$$
+R_{borrow} = R_{slope1} + \frac{R_{slope2} \times (U - U_{optimal})}{1 - U_{optimal}}
+$$
 
    其中：
    - $R_{slope1}$：第一阶段斜率
@@ -342,9 +344,10 @@ $$
 3. **存款利率计算**：
    存款利率 = 借款利率 × (1 - 储备金率)
 
-   $$ 
-   R_{supply} = R_{borrow} \times (1 - R_{reserve})
-   $$
+
+$$
+R_{supply} = R_{borrow} \times (1 - R_{reserve})
+$$
 
 ###### 奖励利率
 
@@ -369,25 +372,26 @@ $$
 
 1. **捐赠比例 ($donationRatio$)**：
 
-   $$
-   donationRatio = \frac{donationReserves}{totalDonations}
-   $$
+
+$$
+donationRatio = \frac{donationReserves}{totalDonations}
+$$
 
 2. **额外存款奖励利率 ($extraSupplyInterestRateBonus$)**：
    初始时设定一个奖励利率上限 $supplyInterestRateBonusInitial$，再根据当前 $donationRatio$ 比例线性缩放。
 
-   $$
-   newSupplyBonus = supplyInterestRateBonusInitial \times donationRatio
-   $$
+$$
+newSupplyBonus = supplyInterestRateBonusInitial \times donationRatio
+$$
 
    若计算结果低于最低门槛 0.5%，则奖励直接归零。
 
 3. **借款利率折扣 ($borrowInterestRateDiscount$)**：
    与额外存款奖励类似，对借款利率折扣以相同的方式缩放：
 
-   $$
-   newBorrowDiscount = borrowInterestRateDiscountInitial \times donationRatio
-   $$
+$$
+newBorrowDiscount = borrowInterestRateDiscountInitial \times donationRatio
+$$
 
    同样的，若计算结果低于最低门槛 0.5%，则折扣设为 0。
 
