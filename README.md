@@ -158,33 +158,45 @@ Bonding Curve 是一条描述代币价格与代币供应量关系的函数曲线
 
 当代币供给从 $x_0$ 增长 $\Delta x$ 到 $x_1=x_0+\Delta x$, 所需要的资金量为
 
-<div align="center">
-<img src="https://latex.codecogs.com/svg.latex?\Delta%20y%20=%20\int_{x_0}^{x_1}%20a%20\cdot%20e^{b%20\cdot%20x}%20\,%20dx" />
-</div>
+$$
+\Delta y = \int_{x_0}^{x_1} a \cdot e^{b \cdot x} \, dx
+$$
 
 可得：
 
-<div align="center">
-<img src="https://latex.codecogs.com/svg.latex?\Delta%20y%20=%20\frac{a%20\cdot%20\left(e^{b%20\cdot%20(x_0+\Delta%20x)}%20-%20e^{b%20\cdot%20x_0}\right)}{b}" />
-</div>
+$$
+\Delta y = \frac{a \cdot \left(e^{b \cdot (x_0+\Delta x)} - e^{b \cdot x_0}\right)}{b}
+$$
 
 通过这 公式，我们可以推导 $\Delta x$ 的表达式：
 
-<div align="center">
-<img src="https://latex.codecogs.com/svg.latex?\begin{align}\Delta%20y%20&=%20\frac{a%20\cdot%20\left(e^{b%20\cdot%20(x_0%20+%20\Delta%20x)}%20-%20e^{b%20\cdot%20x_0}\right)}{b}\\\frac{b%20\cdot%20\Delta%20y}{a}%20&=%20e^{b%20\cdot%20(x_0%20+%20\Delta%20x)}%20-%20e^{b%20\cdot%20x_0}\\%20\frac{b%20\cdot%20\Delta%20y}{a}%20+%20e^{b%20\cdot%20x_0}%20&=e^{b%20\cdot%20(x_0%20+%20\Delta%20x)}%20\\b%20\cdot%20(x_0%20+%20\Delta%20x)%20&=%20\ln\left(\frac{b%20\cdot%20\Delta%20y}{a}%20+%20e^{b%20\cdot%20x_0}\right)\\\Delta%20x%20&=%20\frac{1}{b}%20\cdot%20\ln\left(\frac{b%20\cdot%20\Delta%20y}{a}%20+%20e^{b%20\cdot%20x_0}\right)%20-%20x_0\end{align}" />
-</div>
+$$
+\begin{align}
+\Delta y &= \frac{a \cdot \left(e^{b \cdot (x_0 + \Delta x)} - e^{b \cdot x_0}\right)}{b} \\
+\frac{b \cdot \Delta y}{a} &= e^{b \cdot (x_0 + \Delta x)} - e^{b \cdot x_0} \\
+\frac{b \cdot \Delta y}{a} + e^{b \cdot x_0} &= e^{b \cdot (x_0 + \Delta x)} \\
+b \cdot (x_0 + \Delta x) &= \ln\left(\frac{b \cdot \Delta y}{a} + e^{b \cdot x_0}\right) \\
+\Delta x &= \frac{1}{b} \cdot \ln\left(\frac{b \cdot \Delta y}{a} + e^{b \cdot x_0}\right) - x_0
+\end{align}
+$$
 
 同理，当代币供给从 $x_1$ 减少 $\Delta x$ 到 $x_0=x_1-\Delta x$ 时，可以获得的资金量为:
 
-<div align="center">
-<img src="https://latex.codecogs.com/svg.latex?\Delta%20y%20=%20\frac{a%20\cdot%20\left(e^{b%20\cdot%20x_1}%20-%20e^{b%20\cdot%20(x_1-\Delta%20x)}\right)}{b}" />
-</div>
+$$
+\Delta y = \frac{a \cdot \left(e^{b \cdot x_1} - e^{b \cdot (x_1-\Delta x)}\right)}{b}
+$$
 
 通过这个公式，我们可以推导出卖出代币数量 $\Delta x$ 的表达式：
 
-<div align="center">
-<img src="https://latex.codecogs.com/svg.latex?\begin{align}\Delta%20y%20&=%20\frac{a%20\cdot%20\left(e^{b%20\cdot%20x_1}%20-%20e^{b%20\cdot%20(x_1-\Delta%20x)}\right)}{b}\\\frac{b%20\cdot%20\Delta%20y}{a}%20&=%20e^{b%20\cdot%20x_1}%20-%20e^{b%20\cdot%20(x_1-\Delta%20x)}\\e^{b%20\cdot%20(x_1-\Delta%20x)}%20&=%20e^{b%20\cdot%20x_1}%20-%20\frac{b%20\cdot%20\Delta%20y}{a}\\b%20\cdot%20(x_1-\Delta%20x)%20&=%20\ln\left(e^{b%20\cdot%20x_1}%20-%20\frac{b%20\cdot%20\Delta%20y}{a}\right)\\\Delta%20x%20&=%20x_1%20-%20\frac{1}{b}%20\cdot%20\ln\left(e^{b%20\cdot%20x_1}%20-%20\frac{b%20\cdot%20\Delta%20y}{a}\right)\end{align}" />
-</div>
+$$
+\begin{align}
+\Delta y &= \frac{a \cdot \left(e^{b \cdot x_1} - e^{b \cdot (x_1-\Delta x)}\right)}{b} \\
+\frac{b \cdot \Delta y}{a} &= e^{b \cdot x_1} - e^{b \cdot (x_1-\Delta x)} \\
+e^{b \cdot (x_1-\Delta x)} &= e^{b \cdot x_1} - \frac{b \cdot \Delta y}{a} \\
+b \cdot (x_1-\Delta x) &= \ln\left(e^{b \cdot x_1} - \frac{b \cdot \Delta y}{a}\right) \\
+\Delta x &= x_1 - \frac{1}{b} \cdot \ln\left(e^{b \cdot x_1} - \frac{b \cdot \Delta y}{a}\right)
+\end{align}
+$$
 
 由于 Move 不支持浮点数运算，需要使用定点数来处理小数。具体实现见[bonding_curve.move](contracts/pumplend/sources/bonding_curve.move)。
 
@@ -202,22 +214,19 @@ Bonding Curve 是一条描述代币价格与代币供应量关系的函数曲线
 
 每种新代币与 SUI 的 CETUS 池中记录了以下数量：
 
-- \(X_i\)：该代币 \(i\) 对应的 SUI 数量
-- \(Y_i\)：该代币 \(i\) 对应的代币数量
+- $X_i$：该代币 $i$ 对应的 SUI 数量
+- $Y_i$：该代币 $i$ 对应的代币数量
 
-代币 \(i\) 的价格近似为：
-\[
+代币 $i$ 的价格近似为：
+$$
 \text{价格}_i = \frac{X_i}{Y_i} \quad (\text{SUI/Token})
-\]
+$$
 
-由于协议的特殊性，目前只能部署在测试网上，因此无法使用预言机作为价格源。
-本协议也为上线主网提供了备用方案：
+由于协议的特殊性，目前只能部署在测试网上，因此无法使用预言机作为价格源。本协议也为上线主网提供了备用方案：
 
 1. 增加多种主流加密货币的借贷，例如 WBTC、WETH、USDC
 2. 协议改为美元计价并使用 Pyth 等预言机提供价格源
 3. 当新代币市值达到 5000 万美元并由 Pyth 提供喂价服务后方可开启抵押品和借款服务，否则，只开放存款服务
-
-
 
 ##### 抵押、借款与限制
 
@@ -227,55 +236,51 @@ Bonding Curve 是一条描述代币价格与代币供应量关系的函数曲线
 - **新代币抵押率 (LTV_token)**：20%
 
 **最大可借款价值**（以 SUI 计）：  
-\[
+$$
 V_{borrow}^{max} = \sum_j (V_{C_j} \times LTV_{C_j})
-\]
+$$
 
 其中:
 
-- \(V_{C_j}\) 是抵押物 \(j\) 的价值(以 SUI 计)
-- \(LTV_{C_j}\) 是抵押物 \(j\) 的抵押率(SUI 为 60%, 新代币为 20%)
+- $V_{C_j}$ 是抵押物 $j$ 的价值(以 SUI 计)
+- $LTV_{C_j}$ 是抵押物 $j$ 的抵押率(SUI 为 60%, 新代币为 20%)
 
 例如:
 
 - 用户抵押 100 SUI 和价值 100 SUI 的新代币
-- 最大可借款价值 = 100 × 60% + 100 × 20% = 80 SUI
+- 最大可借款价值 = $100 \times 60\% + 100 \times 20\% = 80$ SUI
 
 为避免新代币价格波动过大，清算不及时导致坏账，协议规定：
 
 1. 当代币价格低于 0.0125 SUI/Token 时，不开放借款服务，并且无法作为抵押品
 2. 当代币价格大于 0.0125 SUI/Token 并开放借款后，此时依旧存在代币价格大幅上升的风险，因此在借出非SUI代币时，将按照以下公式计算可借出的代币价值：
-   \[
+   $$
    \frac{\sum_j (V_{C_j} \times LTV_{C_j}) - (V_{borrow}^{SUI} + token\_debt\_multiplier \times \sum_k V_{borrow}^{token_k})}{token\_debt\_multiplier}
-   \]
+   $$
 
 其中:
-- \(V_{C_j}\) 是抵押物 \(j\) 的价值(以 SUI 计)
-- \(LTV_{C_j}\) 是抵押物 \(j\) 的抵押率(SUI 为 60%, 新代币为 20%)
-- \(V_{borrow}^{SUI}\) 是借出的 SUI 价值
-- \(V_{borrow}^{token_k}\) 是借出的第 k 种代币的价值(以 SUI 计)
-- \(token\_debt\_multiplier\) 是非 SUI 代币的债务乘数(定义为3倍)，该系数仅用于降低杠杆率，不对实际的债务价值产生影响，也不影响健康因子的计算
-
-
+- $V_{C_j}$ 是抵押物 $j$ 的价值(以 SUI 计)
+- $LTV_{C_j}$ 是抵押物 $j$ 的抵押率(SUI 为 60%, 新代币为 20%)
+- $V_{borrow}^{SUI}$ 是借出的 SUI 价值
+- $V_{borrow}^{token_k}$ 是借出的第 $k$ 种代币的价值(以 SUI 计)
+- $token\_debt\_multiplier$ 是非 SUI 代币的债务乘数(定义为3倍)，该系数仅用于降低杠杆率，不对实际的债务价值产生影响，也不影响健康因子的计算
 
 ##### 多代币健康因子 (HF) 计算
 
 为了考虑多资产抵押和借款的风险水平，引入健康因子 (Health Factor, HF)。HF 综合考虑用户的所有抵押品和借款，判断是否可被清算。
 
-- 定义抵押物集合 \(\{C_j\}\)，每种抵押物都有一个清算阈值 \(T_{C_j}\)（SUI为85%，新代币为70%）。
-- 定义借款集合 \(\{B_k\}\)，将所有借款折算为 SUI 价值 \(V_{B_k}\)。总借款价值为：
-  \[
+- 定义抵押物集合 $\{C_j\}$，每种抵押物都有一个清算阈值 $T_{C_j}$（SUI为85%，新代币为70%）。
+- 定义借款集合 $\{B_k\}$，将所有借款折算为 SUI 价值 $V_{B_k}$。总借款价值为：
+  $$
   V_{borrow}^{total} = \sum_k V_{B_k}
-  \]
+  $$
 
 **健康因子计算**：
-\[
+$$
 HF = \frac{\sum_j (V_{C_j} \times T_{C_j})}{V_{borrow}^{total}}
-\]
+$$
 
-当 \(HF < 1\) 时，用户的抵押物（按清算阈值计）不足以覆盖所借资产，清算人可对其头寸进行清算。
-
-
+当 $HF < 1$ 时，用户的抵押物（按清算阈值计）不足以覆盖所借资产，清算人可对其头寸进行清算。
 
 ##### 清算机制与激励
 
@@ -299,9 +304,6 @@ HF = \frac{\sum_j (V_{C_j} \times T_{C_j})}{V_{borrow}^{total}}
    - 清算人支付债务代币，系统将抵押品转给清算人
    - 被清算用户的债务和抵押品相应减少
 
-
-
-
 ##### 利率模型
 
 ###### 基础利率
@@ -309,40 +311,41 @@ HF = \frac{\sum_j (V_{C_j} \times T_{C_j})}{V_{borrow}^{total}}
 采用分段线性利率模型，根据资金池的利用率动态调整利率。
 
 1. **利用率计算**：
-   \[
-   U = \frac{总借款}{总存款}
-   \]
+   $$
+   U = \frac{\text{总借款}}{\text{总存款}}
+   $$
 
 2. **分段利率模型**：
-   - 设定最优利用率 U_optimal = 50%
-   - 当 U ≤ U_optimal 时，利率线性增长：
-     \[
+   - 设定最优利用率 $U_{optimal} = 50\%$
+   - 当 $U \leq U_{optimal}$ 时，利率线性增长：
+     $$
      R_{borrow} = \frac{R_{slope1} \times U}{U_{optimal}}
-     \]
-   - 当 U > U_optimal 时，利率加速增长：
-     \[
+     $$
+   - 当 $U > U_{optimal}$ 时，利率加速增长：
+     $$
      R_{borrow} = R_{slope1} + \frac{R_{slope2} \times (U - U_{optimal})}{1 - U_{optimal}}
-     \]
+     $$
 
 其中：
-- R_slope1: 第一阶段斜率
-- R_slope2: 第二阶段斜率（更陡）
+- $R_{slope1}$: 第一阶段斜率
+- $R_{slope2}$: 第二阶段斜率（更陡）
 
 3. **存款利率计算**：
    存款利率 = 借款利率 × (1 - 储备金率)
-   \[
+   $$
    R_{supply} = R_{borrow} \times (1 - R_{reserve})
-   \]
+   $$
 
 ###### 奖励利率
-
 
 在基础利率模型的基础上，本协议引入了额外的奖励利率，用以激励用户存入资产并在一定条件下降低借款成本。该奖励利率的来源主要是初始阶段从流动性池中抽取出来的捐赠资金，通过动态调整，确保在早期有足够的奖励来吸引存款者，同时在资金被借用和消耗的过程中，奖励利率会逐步减弱。
 
 **奖励利率的触发与作用**
 
 1. **额外存款利率奖励**  
-   当借贷池中尚有未消耗的捐赠资金时，系统会根据剩余捐赠资金的比例，给予存款者额外的利率奖励。这一措施能在早期大幅提高存款利率，激励用户将代币存入池中，从而推高代币价格。
+   当借贷池中尚有未消耗的捐赠资金时，系统会根据剩余
+
+捐赠资金的比例，给予存款者额外的利率奖励。这一措施能在早期大幅提高存款利率，激励用户将代币存入池中，从而推高代币价格。
 
 2. **借款利率折扣**  
    当代币开放借款服务且捐赠资金较为充裕时，系统亦会对借款者给出一定的借款利率折扣，以降低借款成本。该折扣将逐渐随捐赠资金的消耗而减小，直到不再提供折扣。通过给予借款利率折扣，可以吸引更多的借款需求，从而推动资金利用率的均衡。
@@ -351,32 +354,31 @@ HF = \frac{\sum_j (V_{C_j} \times T_{C_j})}{V_{borrow}^{total}}
 
 奖励利率的核心在于其动态性，根据剩余捐赠储备在总捐赠中的比例对奖励和折扣进行调整。
 
-- **捐赠总量 (total_donations)**：初始时从流动性池中抽取的总捐赠量。
-- **捐赠储备 (donation_reserves)**：当前尚未被用于奖励或折扣的剩余捐赠资金。
+- **捐赠总量 ($total\_donations$)**：初始时从流动性池中抽取的总捐赠量。
+- **捐赠储备 ($donation\_reserves$)**：当前尚未被用于奖励或折扣的剩余捐赠资金。
 
 计算公式如下：
 
-1. **捐赠比例 (donation_ratio)**：
-   \[
+1. **捐赠比例 ($donation\_ratio$)**：
+   $$
    donation\_ratio = \frac{donation\_reserves}{total\_donations}
-   \]
+   $$
 
-
-2. **额外存款奖励利率 (extra_supply_interest_rate_bonus)**：
-   初始时设定一个奖励利率上限 \(supply\_interest\_rate\_bonus\_initial\) ，再根据当前 \(donation\_ratio\) 比例线性缩放。
-   \[
+2. **额外存款奖励利率 ($extra\_supply\_interest\_rate\_bonus$)**：
+   初始时设定一个奖励利率上限 $supply\_interest\_rate\_bonus\_initial$ ，再根据当前 $donation\_ratio$ 比例线性缩放。
+   $$
    new\_supply\_bonus = {supply\_interest\_rate\_bonus\_initial \times donation\_ratio}
-   \]
+   $$
 
-   若计算结果低于最低门槛0.5%，则奖励直接归零。
+   若计算结果低于最低门槛 0.5%，则奖励直接归零。
 
-3. **借款利率折扣 (borrow_interest_rate_discount)**：
+3. **借款利率折扣 ($borrow\_interest\_rate\_discount$)**：
    与额外存款奖励类似，对借款利率折扣以相同的方式缩放：
-   \[
+   $$
    new\_borrow\_discount = {borrow\_interest\_rate\_discount\_initial \times donation\_ratio}
-   \]
+   $$
 
-   同样的，若计算结果低于最低门槛0.5%，则折扣设为0。
+   同样的，若计算结果低于最低门槛 0.5%，则折扣设为 0。
 
 ### 贡献者
 
