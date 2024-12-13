@@ -218,9 +218,7 @@ $$
 - $Y_i$：该代币 $i$ 对应的代币数量
 
 代币 $i$ 的价格近似为：
-$$
-\text{价格}_i = \frac{X_i}{Y_i} \quad (\text{SUI/Token})
-$$
+$$\text{价格}_i = \frac{X_i}{Y_i} \quad (\text{SUI/Token})$$
 
 由于协议的特殊性，目前只能部署在测试网上，因此无法使用预言机作为价格源。本协议也为上线主网提供了备用方案：
 
@@ -236,9 +234,7 @@ $$
 - **新代币抵押率 (LTV_token)**：20%
 
 **最大可借款价值**（以 SUI 计）：  
-$$
-V_{borrow}^{max} = \sum_j (V_{C_j} \times LTV_{C_j})
-$$
+$$V_{borrow}^{max} = \sum_j (V_{C_j} \times LTV_{C_j})$$
 
 其中:
 
@@ -254,9 +250,7 @@ $$
 
 1. 当代币价格低于 0.0125 SUI/Token 时，不开放借款服务，并且无法作为抵押品
 2. 当代币价格大于 0.0125 SUI/Token 并开放借款后，此时依旧存在代币价格大幅上升的风险，因此在借出非SUI代币时，将按照以下公式计算可借出的代币价值：
-   $$
-   \frac{\sum_j (V_{C_j} \times LTV_{C_j}) - (V_{borrow}^{SUI} + token\_debt\_multiplier \times \sum_k V_{borrow}^{token_k})}{token\_debt\_multiplier}
-   $$
+   $$\frac{\sum_j (V_{C_j} \times LTV_{C_j}) - (V_{borrow}^{SUI} + token\_debt\_multiplier \times \sum_k V_{borrow}^{token_k})}{token\_debt\_multiplier}$$
 
 其中:
 - $V_{C_j}$ 是抵押物 $j$ 的价值(以 SUI 计)
@@ -276,9 +270,7 @@ $$
   $$
 
 **健康因子计算**：
-$$
-HF = \frac{\sum_j (V_{C_j} \times T_{C_j})}{V_{borrow}^{total}}
-$$
+$$HF = \frac{\sum_j (V_{C_j} \times T_{C_j})}{V_{borrow}^{total}}$$
 
 当 $HF < 1$ 时，用户的抵押物（按清算阈值计）不足以覆盖所借资产，清算人可对其头寸进行清算。
 
@@ -311,20 +303,14 @@ $$
 采用分段线性利率模型，根据资金池的利用率动态调整利率。
 
 1. **利用率计算**：
-   $$
-   U = \frac{\text{总借款}}{\text{总存款}}
-   $$
+   $$U = \frac{\text{总借款}}{\text{总存款}}$$
 
 2. **分段利率模型**：
    - 设定最优利用率 $U_{optimal} = 50\%$
    - 当 $U \leq U_{optimal}$ 时，利率线性增长：
-     $$
-     R_{borrow} = \frac{R_{slope1} \times U}{U_{optimal}}
-     $$
+     $$R_{borrow} = \frac{R_{slope1} \times U}{U_{optimal}}$$
    - 当 $U > U_{optimal}$ 时，利率加速增长：
-     $$
-     R_{borrow} = R_{slope1} + \frac{R_{slope2} \times (U - U_{optimal})}{1 - U_{optimal}}
-     $$
+     $$R_{borrow} = R_{slope1} + \frac{R_{slope2} \times (U - U_{optimal})}{1 - U_{optimal}}$$
 
 其中：
 - $R_{slope1}$: 第一阶段斜率
@@ -332,9 +318,7 @@ $$
 
 3. **存款利率计算**：
    存款利率 = 借款利率 × (1 - 储备金率)
-   $$
-   R_{supply} = R_{borrow} \times (1 - R_{reserve})
-   $$
+   $$R_{supply} = R_{borrow} \times (1 - R_{reserve})$$
 
 ###### 奖励利率
 
@@ -360,23 +344,17 @@ $$
 计算公式如下：
 
 1. **捐赠比例 ($donation\_ratio$)**：
-   $$
-   donation\_ratio = \frac{donation\_reserves}{total\_donations}
-   $$
+   $$donation\_ratio = \frac{donation\_reserves}{total\_donations}$$
 
 2. **额外存款奖励利率 ($extra\_supply\_interest\_rate\_bonus$)**：
    初始时设定一个奖励利率上限 $supply\_interest\_rate\_bonus\_initial$ ，再根据当前 $donation\_ratio$ 比例线性缩放。
-   $$
-   new\_supply\_bonus = {supply\_interest\_rate\_bonus\_initial \times donation\_ratio}
-   $$
+   $$new\_supply\_bonus = {supply\_interest\_rate\_bonus\_initial \times donation\_ratio}$$
 
    若计算结果低于最低门槛 0.5%，则奖励直接归零。
 
 3. **借款利率折扣 ($borrow\_interest\_rate\_discount$)**：
    与额外存款奖励类似，对借款利率折扣以相同的方式缩放：
-   $$
-   new\_borrow\_discount = {borrow\_interest\_rate\_discount\_initial \times donation\_ratio}
-   $$
+   $$new\_borrow\_discount = {borrow\_interest\_rate\_discount\_initial \times donation\_ratio}$$
 
    同样的，若计算结果低于最低门槛 0.5%，则折扣设为 0。
 
