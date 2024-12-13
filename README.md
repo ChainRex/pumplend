@@ -257,16 +257,16 @@ $$
 2. 当代币价格大于 0.0125 SUI/Token 并开放借款后，此时依旧存在代币价格大幅上升的风险，因此在借出非 SUI 代币时，将按照以下公式计算可借出的代币价值：
 
 $$
-\frac{\sum_j (V_{C_j} \times LTV_{C_j}) - (V_{borrow}^{SUI} + token\_debt\_multiplier \times \sum_k V_{borrow}^{token_k})}{token\_debt\_multiplier}
+\frac{\sum_j (V_{C_j} \times LTV_{C_j}) - (V_{Borrow}^{SUI} + TokenDebtMultiplier \times \sum_k V_{Borrow}^{Token_k})}{TokenDebtMultiplier}
 $$
 
 其中：
 
 - $V_{C_j}$ 是抵押物 $j$ 的价值（以 SUI 计）
 - $LTV_{C_j}$ 是抵押物 $j$ 的抵押率（SUI 为 60%，新代币为 20%）
-- $V_{borrow}^{SUI}$ 是借出的 SUI 价值
-- $V_{borrow}^{token_k}$ 是借出的第 $k$ 种代币的价值（以 SUI 计）
-- $token\_debt\_multiplier$ 是非 SUI 代币的债务乘数（定义为 3 倍），该系数仅用于降低杠杆率，不对实际的债务价值产生影响，也不影响健康因子的计算
+- $V_{Borrow}^{SUI}$ 是借出的 SUI 价值
+- $V_{Borrow}^{Token_k}$ 是借出的第 $k$ 种代币的价值（以 SUI 计）
+- $TokenDebtMultiplier$ 是非 SUI 代币的债务乘数（定义为 3 倍），该系数仅用于降低杠杆率，不对实际的债务价值产生影响，也不影响健康因子的计算
 
 ##### 多代币健康因子 (HF) 计算
 
@@ -342,7 +342,7 @@ $$
 3. **存款利率计算**：
    存款利率 = 借款利率 × (1 - 储备金率)
 
-   $$
+   $$ 
    R_{supply} = R_{borrow} \times (1 - R_{reserve})
    $$
 
@@ -362,31 +362,31 @@ $$
 
 奖励利率的核心在于其动态性，根据剩余捐赠储备在总捐赠中的比例对奖励和折扣进行调整。
 
-- **捐赠总量 ($total\_donations$)**：初始时从流动性池中抽取的总捐赠量。
-- **捐赠储备 ($donation\_reserves$)**：当前尚未被用于奖励或折扣的剩余捐赠资金。
+- **捐赠总量 ($totalDonations$)**：初始时从流动性池中抽取的总捐赠量。
+- **捐赠储备 ($donationReserves$)**：当前尚未被用于奖励或折扣的剩余捐赠资金。
 
 计算公式如下：
 
-1. **捐赠比例 ($donation\_ratio$)**：
+1. **捐赠比例 ($donationRatio$)**：
 
    $$
-   donation\_ratio = \frac{donation\_reserves}{total\_donations}
+   donationRatio = \frac{donationReserves}{totalDonations}
    $$
 
-2. **额外存款奖励利率 ($extra\_supply\_interest\_rate\_bonus$)**：
-   初始时设定一个奖励利率上限 $supply\_interest\_rate\_bonus\_initial$，再根据当前 $donation\_ratio$ 比例线性缩放。
+2. **额外存款奖励利率 ($extraSupplyInterestRateBonus$)**：
+   初始时设定一个奖励利率上限 $supplyInterestRateBonusInitial$，再根据当前 $donationRatio$ 比例线性缩放。
 
    $$
-   new\_supply\_bonus = supply\_interest\_rate\_bonus\_initial \times donation\_ratio
+   newSupplyBonus = supplyInterestRateBonusInitial \times donationRatio
    $$
 
    若计算结果低于最低门槛 0.5%，则奖励直接归零。
 
-3. **借款利率折扣 ($borrow\_interest\_rate\_discount$)**：
+3. **借款利率折扣 ($borrowInterestRateDiscount$)**：
    与额外存款奖励类似，对借款利率折扣以相同的方式缩放：
 
    $$
-   new\_borrow\_discount = borrow\_interest\_rate\_discount\_initial \times donation\_ratio
+   newBorrowDiscount = borrowInterestRateDiscountInitial \times donationRatio
    $$
 
    同样的，若计算结果低于最低门槛 0.5%，则折扣设为 0。
